@@ -144,6 +144,75 @@
     return Math.round((wins / currentProfile.matches.length) * 100);
   });
 
+  let reflectionModalOpen = $state(false);
+  let selectedMatch = $state<import("$lib/types").MatchSummaryResponse | null>(
+    null,
+  );
+  let reflectionText = $state("");
+  let reflectionError = $state("");
+  let matchReflections = $state<Record<string, string>>({});
+
+  const currentProfileKey = $derived.by(() => {
+    if (!currentProfile) return "";
+    return `${currentProfile.summoner.puuid}`;
+  });
+
+  function reflectionKey(matchId: string) {
+    return `${currentProfileKey}:${matchId}`;
+  }
+
+  function openReflection(match: import("$lib/types").MatchSummaryResponse) {
+    if (!currentProfile) return;
+    selectedMatch = match;
+    const key = reflectionKey(match.matchId);
+    reflectionText = matchReflections[key] || "";
+    reflectionError = "";
+    reflectionModalOpen = true;
+  }
+
+  function closeReflection() {
+    reflectionModalOpen = false;
+    selectedMatch = null;
+    reflectionText = "";
+    reflectionError = "";
+  }
+
+  function saveReflection() {
+    if (!currentProfile || !selectedMatch) return;
+    const text = reflectionText.trim();
+    if (!text) {
+      reflectionError = "Please write something before saving.";
+      return;
+    }
+
+    const key = reflectionKey(selectedMatch.matchId);
+    matchReflections = {
+      ...matchReflections,
+      [key]: text,
+    };
+
+    localStorage.setItem("lol-reflections", JSON.stringify(matchReflections));
+    reflectionModalOpen = false;
+  }
+
+  function getReflection(match: import("$lib/types").MatchSummaryResponse) {
+    if (!currentProfile) return "";
+    return matchReflections[reflectionKey(match.matchId)] || "";
+  }
+
+  $effect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("lol-reflections");
+      if (stored) {
+        try {
+          matchReflections = JSON.parse(stored);
+        } catch (err) {
+          console.error("Failed to parse stored reflections:", err);
+        }
+      }
+    }
+  });
+
   // Sync profileStore to localStorage
   $effect(() => {
     if (typeof window !== "undefined") {
@@ -260,9 +329,54 @@
       <!-- Matches -->
       <div class="grid gap-4">
         {#each currentProfile.matches as match}
-          <MatchCard {match} />
+          <div class="relative">
+            <MatchCard {match} onMatchSelect={openReflection} />
+            {#if getReflection(match)}
+              <span
+                class="absolute top-2 right-2 px-2 py-1 text-xs bg-green-600 rounded"
+              >
+                Reflection saved
+              </span>
+            {/if}
+          </div>
         {/each}
       </div>
+
+      {#if reflectionModalOpen && selectedMatch}
+        <div
+          class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+        >
+          <div
+            class="w-[min(95vw,600px)] bg-gray-900 border border-gray-700 rounded p-5 shadow-lg"
+          >
+            <h2 class="text-xl font-bold mb-3">
+              Journal reflection - {selectedMatch.champion}
+            </h2>
+            <p class="text-sm text-gray-300 mb-3">
+              Match: {selectedMatch.kda.kills}/{selectedMatch.kda
+                .deaths}/{selectedMatch.kda.assists} • {selectedMatch.result.toUpperCase()}
+            </p>
+            <textarea
+              bind:value={reflectionText}
+              class="w-full h-32 p-2 mb-3 bg-gray-800 border border-gray-600 rounded resize-none"
+              placeholder="Write your reflections about this match..."
+            ></textarea>
+            {#if reflectionError}
+              <p class="text-red-400 mb-2">{reflectionError}</p>
+            {/if}
+            <div class="flex justify-end gap-2">
+              <button
+                class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+                onclick={closeReflection}>Cancel</button
+              >
+              <button
+                class="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+                onclick={saveReflection}>Save</button
+              >
+            </div>
+          </div>
+        </div>
+      {/if}
     {:else}
       <p class="text-gray-400">Search for a summoner to view their profile.</p>
     {/if}

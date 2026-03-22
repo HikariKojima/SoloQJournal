@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { MatchSummaryResponse } from "$lib/types";
 
-  let { match }: { match: MatchSummaryResponse } = $props();
+  let { match, onMatchSelect }: { match: MatchSummaryResponse; onMatchSelect?: (match: MatchSummaryResponse) => void } = $props();
 
   const csPerMin = $derived.by(() => {
     if (match.durationSeconds === 0) return 0;
@@ -16,7 +16,16 @@
 </script>
 
 <div
-  class="bg-gray-800 border-l-4 {borderColor} p-4 rounded shadow hover:scale-105 transition-transform"
+  role="button"
+  tabindex="0"
+  class="cursor-pointer bg-gray-800 border-l-4 {borderColor} p-4 rounded shadow hover:scale-105 transition-transform"
+  onclick={() => onMatchSelect?.(match)}
+  onkeydown={(event: KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
+      onMatchSelect?.(match);
+      event.preventDefault();
+    }
+  }}
 >
   <div class="flex justify-between items-center">
     <div>
