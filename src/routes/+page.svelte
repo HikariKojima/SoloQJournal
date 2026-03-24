@@ -1,9 +1,10 @@
 <script lang="ts">
   import MatchCard from "$lib/components/MatchCard.svelte";
-  import { profileStore } from "$lib/profile.svelte";
-  import type { PageData } from "./$types";
-  import type { ProfileData } from "$lib/types";
-  import { Search, Save } from "lucide-svelte";
+import { profileStore } from "$lib/profile.svelte";
+import type { PageData } from "./$types";
+import type { ProfileData } from "$lib/types";
+import { buildHistoryStats } from "$lib/utils/coaching";
+import { Search, Save } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -150,6 +151,13 @@
   }
 
   const currentProfile = $derived(searchedProfile || data.profileData);
+
+  const computedHistory = $derived.by(() => {
+    if (!currentProfile?.matches?.length) {
+      return buildHistoryStats([], "");
+    }
+    return buildHistoryStats(currentProfile.matches, currentProfile.summoner.puuid);
+  });
 
   const winRate = $derived.by(() => {
     if (!currentProfile?.matches.length) return null;
@@ -396,9 +404,15 @@
 
       <!-- Matches -->
       <div class="grid gap-4">
-        {#each currentProfile.matches as match}
+        {#each currentProfile.matches as match (match.matchId)}
           <div class="relative">
-            <MatchCard {match} onMatchSelect={openReflection} />
+            <MatchCard
+              {match}
+              history={computedHistory}
+              playerPuuid={currentProfile.summoner.puuid}
+              leagueEntry={null}
+              onMatchSelect={openReflection}
+            />
             {#if getReflection(match)}
               <span
                 class="absolute top-2 right-2 px-2 py-1 text-xs bg-green-600 rounded"
