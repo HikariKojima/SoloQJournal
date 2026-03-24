@@ -160,14 +160,46 @@ export async function getMatchSummaries(
   const summaries: MatchSummaryResponse[] = [];
   for (const matchId of matchIds) {
     try {
-      const details = await getMatchDetails(region, matchId, puuid);
+      const regionalBase = getRegionalBase(region);
+      const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
+      const data = await riotFetch(url);
+
+      const participant = data.info.participants.find(
+        (p: any) => p.puuid === puuid,
+      );
+      if (!participant) continue;
+
+      // Calculate team statistics
+      const teamId = participant.teamId;
+      const teamParticipants = data.info.participants.filter(
+        (p: any) => p.teamId === teamId,
+      );
+      const teamKills = teamParticipants.reduce((sum: number, p: any) => sum + p.kills, 0);
+      const teamDeaths = teamParticipants.reduce((sum: number, p: any) => sum + p.deaths, 0);
+
+      const kda = {
+        kills: participant.kills,
+        deaths: participant.deaths,
+        assists: participant.assists,
+        ratio:
+          participant.deaths > 0
+            ? (participant.kills + participant.assists) / participant.deaths
+            : null,
+      };
+
       summaries.push({
-        matchId: details.matchId,
-        champion: details.champion,
-        kda: details.kda,
-        result: details.result,
-        durationSeconds: details.gameDurationSeconds,
-        stats: details.stats,
+        matchId,
+        champion: participant.championName,
+        kda,
+        result: participant.win ? "win" : "loss",
+        durationSeconds: data.info.gameDuration,
+        stats: {
+          cs: participant.totalMinionsKilled + participant.neutralMinionsKilled,
+          gold: participant.goldEarned,
+          visionScore: participant.visionScore,
+        },
+        teamKills,
+        teamDeaths,
       });
     } catch (err) {
       console.error(`Failed to fetch match ${matchId}:`, err);

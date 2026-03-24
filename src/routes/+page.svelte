@@ -115,6 +115,9 @@
       );
       if (!res.ok) throw new Error(await res.text());
       searchedProfile = await res.json();
+      // Clear the input fields after successful fetch
+      gameName = "";
+      tagLine = "";
     } catch (err: any) {
       error = err.message;
     } finally {
@@ -127,11 +130,23 @@
     const profile = {
       gameName,
       tagLine,
+      region: selectedRegion,
       summoner: searchedProfile.summoner,
       matches: searchedProfile.matches,
       lastFetched: new Date().toISOString(),
     };
     profileStore.addProfile(profile);
+  }
+
+  async function loadProfile(profile: ProfileData & { region?: string; gameName: string; tagLine: string }) {
+    // Set the region, game name, and tag line from the profile
+    // Fallback to current selectedRegion if profile doesn't have region (for old saved profiles)
+    selectedRegion = profile.region || selectedRegion || "euw1";
+    gameName = profile.gameName;
+    tagLine = profile.tagLine;
+    
+    // Trigger the search with the loaded profile data
+    await handleSearch();
   }
 
   const currentProfile = $derived(searchedProfile || data.profileData);
@@ -151,10 +166,53 @@
   let reflectionText = $state("");
   let reflectionError = $state("");
   let matchReflections = $state<Record<string, string>>({});
+  let showStats = $state(false);
 
   const currentProfileKey = $derived.by(() => {
     if (!currentProfile) return "";
     return `${currentProfile.summoner.puuid}`;
+  });
+
+  // Stats calculations for reflection modal
+  const matchStats = $derived.by(() => {
+    if (!selectedMatch) {
+      return {
+        csPerMin: 0,
+        goldPerMin: 0,
+        kpPercent: 0,
+        deathPercent: 0,
+      };
+    }
+
+    const durationMinutes = selectedMatch.durationSeconds / 60;
+    const csPerMin = durationMinutes > 0
+      ? Math.round(((selectedMatch.stats.cs / durationMinutes) * 100)) / 100
+      : 0;
+    const goldPerMin = durationMinutes > 0
+      ? Math.round(((selectedMatch.stats.gold / durationMinutes) * 100)) / 100
+      : 0;
+
+    // Kill Participation: (kills + assists) / teamKills * 100
+    const kpPercent =
+      selectedMatch.teamKills > 0
+        ? Math.round(
+            (((selectedMatch.kda.kills + selectedMatch.kda.assists) /
+              selectedMatch.teamKills) *
+              100) *
+              100,
+          ) / 100
+        : 0;
+
+    // Death Contribution: deaths / teamDeaths * 100
+    const deathPercent =
+      selectedMatch.teamDeaths > 0
+        ? Math.round(
+            ((selectedMatch.kda.deaths / selectedMatch.teamDeaths) * 100) *
+              100,
+          ) / 100
+        : 0;
+
+    return { csPerMin, goldPerMin, kpPercent, deathPercent };
   });
 
   function reflectionKey(matchId: string) {
@@ -167,6 +225,7 @@
     const key = reflectionKey(match.matchId);
     reflectionText = matchReflections[key] || "";
     reflectionError = "";
+    showStats = false;
     reflectionModalOpen = true;
   }
 
@@ -175,6 +234,12 @@
     selectedMatch = null;
     reflectionText = "";
     reflectionError = "";
+    showStats = false;
+  }
+
+  function copyStatsToReflection() {
+    const statsLine = `Stats: ${matchStats.csPerMin.toFixed(2)} CS/m | ${matchStats.kpPercent.toFixed(1)}% KP | ${matchStats.goldPerMin.toFixed(2)} Gold/m | ${matchStats.deathPercent.toFixed(1)}% Deaths\n\n`;
+    reflectionText = statsLine + reflectionText;
   }
 
   function saveReflection() {
@@ -229,13 +294,16 @@
       {#each profileStore.list as profile, i}
         <li>
           <button
-            class="w-full text-left p-2 rounded hover:bg-gray-700 {i ===
+            class="w-full text-left p-2 rounded hover:bg-gray-700 transition {i ===
             profileStore.activeIndex
               ? 'bg-gray-700'
               : ''}"
-            onclick={() => profileStore.setActive(i)}
+            onclick={() => {
+              profileStore.setActive(i);
+              loadProfile(profile);
+            }}
           >
-            {profile.gameName}#{profile.tagLine}
+            {profile.gameName}{profile.tagLine}
           </button>
         </li>
       {/each}
@@ -347,15 +415,86 @@
           class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
         >
           <div
-            class="w-[min(95vw,600px)] bg-gray-900 border border-gray-700 rounded p-5 shadow-lg"
+            class="w-[min(95vw,700px)] bg-gray-900 border border-gray-700 rounded p-5 shadow-lg max-h-[90vh] overflow-y-auto"
           >
-            <h2 class="text-xl font-bold mb-3">
-              Journal reflection - {selectedMatch.champion}
-            </h2>
+            <div class="flex justify-between items-center mb-3">
+              <h2 class="text-xl font-bold">
+                Journal reflection - {selectedMatch.champion}
+              </h2>
+              <button
+                class="text-sm px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
+                onclick={() => (showStats = !showStats)}
+              >
+                {showStats ? "Hide Stats" : "Show Stats"}
+              </button>
+            </div>
+
             <p class="text-sm text-gray-300 mb-3">
               Match: {selectedMatch.kda.kills}/{selectedMatch.kda
                 .deaths}/{selectedMatch.kda.assists} • {selectedMatch.result.toUpperCase()}
             </p>
+
+            {#if showStats}
+              <!-- Stats Dashboard Grid -->
+              <div class="mb-4 p-4 bg-gray-800 rounded border border-gray-700">
+                <h3 class="text-sm font-semibold mb-3">Performance Stats</h3>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                  <!-- CS/Min -->
+                  <div class="bg-gray-700 p-3 rounded">
+                    <p class="text-xs text-gray-400 mb-1">CS/Min</p>
+                    <p
+                      class="text-2xl font-bold {matchStats.csPerMin > 8
+                        ? 'text-green-400'
+                        : matchStats.csPerMin < 5
+                          ? 'text-red-400'
+                          : 'text-gray-300'}"
+                    >
+                      {matchStats.csPerMin.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <!-- Gold/Min -->
+                  <div class="bg-gray-700 p-3 rounded">
+                    <p class="text-xs text-gray-400 mb-1">Gold/Min</p>
+                    <p class="text-2xl font-bold text-yellow-400">
+                      {matchStats.goldPerMin.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <!-- Kill Participation -->
+                  <div class="bg-gray-700 p-3 rounded">
+                    <p class="text-xs text-gray-400 mb-1">Kill Participation</p>
+                    <p
+                      class="text-2xl font-bold {matchStats.kpPercent > 50
+                        ? 'text-blue-400'
+                        : 'text-gray-300'}"
+                    >
+                      {matchStats.kpPercent.toFixed(1)}%
+                    </p>
+                  </div>
+
+                  <!-- Death Contribution -->
+                  <div class="bg-gray-700 p-3 rounded">
+                    <p class="text-xs text-gray-400 mb-1">Death Contribution</p>
+                    <p
+                      class="text-2xl font-bold {matchStats.deathPercent > 50
+                        ? 'text-red-500'
+                        : 'text-gray-300'}"
+                    >
+                      {matchStats.deathPercent.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onclick={copyStatsToReflection}
+                  class="w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded transition"
+                >
+                  Copy Stats to Reflection
+                </button>
+              </div>
+            {/if}
+
             <textarea
               bind:value={reflectionText}
               class="w-full h-32 p-2 mb-3 bg-gray-800 border border-gray-600 rounded resize-none"

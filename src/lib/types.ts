@@ -31,6 +31,8 @@ export type MatchSummaryResponse = {
     gold: number;
     visionScore: number;
   };
+  teamKills: number;
+  teamDeaths: number;
 };
 
 export type MatchDetailsResponse = {
@@ -84,6 +86,7 @@ export type AiAnalysisResponse = {
 export type SavedProfile = {
   gameName: string;
   tagLine: string;
+  region: string;
   summoner: SummonerResponse;
   matches: MatchSummaryResponse[];
   lastFetched: string;
