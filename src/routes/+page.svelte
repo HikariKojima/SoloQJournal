@@ -15,6 +15,8 @@ import { Search, Save } from "lucide-svelte";
   let loading = $state(false);
   let error = $state("");
   let tagLineError = $state("");
+  let currentSearchGameName = $state("");
+  let currentSearchTagLine = $state("");
 
   const regionOptions = [
     {
@@ -116,9 +118,15 @@ import { Search, Save } from "lucide-svelte";
       );
       if (!res.ok) throw new Error(await res.text());
       searchedProfile = await res.json();
+      // Store the search parameters for load more
+      currentSearchGameName = gameName;
+      currentSearchTagLine = cleanTagLine;
       // Clear the input fields after successful fetch
       gameName = "";
       tagLine = "";
+      // Reset pagination state
+      offset = 0;
+      hasMore = true;
     } catch (err: any) {
       error = err.message;
     } finally {
@@ -150,6 +158,37 @@ import { Search, Save } from "lucide-svelte";
     await handleSearch();
   }
 
+  async function loadMore() {
+    if (!currentProfile || isLoadingMore || !hasMore) return;
+    
+    isLoadingMore = true;
+    try {
+      const nextOffset = offset + 10;
+      const res = await fetch(
+        `/api/summoner?gameName=${encodeURIComponent(currentSearchGameName)}&tagLine=${encodeURIComponent(currentSearchTagLine)}&platform=${encodeURIComponent(selectedRegion)}&offset=${nextOffset}`,
+      );
+      if (!res.ok) throw new Error(await res.text());
+      
+      const response = await res.json();
+      const newMatches = response.matches || [];
+      
+      // Append new matches to existing list
+      if (currentProfile.matches) {
+        currentProfile.matches = [...currentProfile.matches, ...newMatches];
+      }
+      
+      // Update offset and check if there are more matches
+      offset = nextOffset;
+      if (newMatches.length < 10) {
+        hasMore = false;
+      }
+    } catch (err: any) {
+      console.error("Failed to load more matches:", err.message);
+    } finally {
+      isLoadingMore = false;
+    }
+  }
+
   const currentProfile = $derived(searchedProfile || data.profileData);
 
   const computedHistory = $derived.by(() => {
@@ -174,11 +213,64 @@ import { Search, Save } from "lucide-svelte";
   let reflectionText = $state("");
   let reflectionError = $state("");
   let matchReflections = $state<Record<string, string>>({});
-  let showStats = $state(false);
+  let offset = $state(0);
+  let isLoadingMore = $state(false);
+  let hasMore = $state(true);
+  let dismissed = $state(false);
 
   const currentProfileKey = $derived.by(() => {
     if (!currentProfile) return "";
     return `${currentProfile.summoner.puuid}`;
+  });
+
+  const tiltState = $derived.by(() => {
+    const matches = (currentProfile?.matches ?? []) as Array<any>;
+    const viewerPuuid = currentProfile?.summoner?.puuid;
+    if (!matches.length || !viewerPuuid) {
+      return { streakLength: 0, isTilting: false };
+    }
+
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    let streakLength = 0;
+
+    for (const match of matches) {
+      const participant = match?.info?.participants?.find(
+        (p: any) => p.puuid === viewerPuuid,
+      );
+      const didWin = typeof participant?.win === "boolean"
+        ? participant.win
+        : match?.result === "win";
+
+      const playedAt =
+        match?.info?.gameEndTimestamp ??
+        match?.info?.gameStartTimestamp ??
+        match?.gameEndTimestamp ??
+        match?.gameStartTimestamp ??
+        null;
+
+      if (!playedAt || now - playedAt > oneDayMs) {
+        break;
+      }
+
+      if (didWin) {
+        break;
+      }
+
+      streakLength += 1;
+    }
+
+    return {
+      streakLength,
+      isTilting: streakLength >= 3,
+    };
+  });
+
+  $effect(() => {
+    const puuid = currentProfile?.summoner?.puuid;
+    if (puuid) {
+      dismissed = false;
+    }
   });
 
   // Stats calculations for reflection modal
@@ -233,7 +325,6 @@ import { Search, Save } from "lucide-svelte";
     const key = reflectionKey(match.matchId);
     reflectionText = matchReflections[key] || "";
     reflectionError = "";
-    showStats = false;
     reflectionModalOpen = true;
   }
 
@@ -242,13 +333,8 @@ import { Search, Save } from "lucide-svelte";
     selectedMatch = null;
     reflectionText = "";
     reflectionError = "";
-    showStats = false;
   }
 
-  function copyStatsToReflection() {
-    const statsLine = `Stats: ${matchStats.csPerMin.toFixed(2)} CS/m | ${matchStats.kpPercent.toFixed(1)}% KP | ${matchStats.goldPerMin.toFixed(2)} Gold/m | ${matchStats.deathPercent.toFixed(1)}% Deaths\n\n`;
-    reflectionText = statsLine + reflectionText;
-  }
 
   function saveReflection() {
     if (!currentProfile || !selectedMatch) return;
@@ -402,6 +488,26 @@ import { Search, Save } from "lucide-svelte";
         {/if}
       </div>
 
+      {#if tiltState.isTilting && !dismissed}
+        <div class="mb-4 bg-zinc-900 border-l-4 border-amber-500 p-3 rounded">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-sm text-amber-100">
+              {tiltState.streakLength}-game losing streak. Consider taking a break.
+            </p>
+            <button
+              type="button"
+              class="text-amber-200 hover:text-amber-100"
+              onclick={() => {
+                dismissed = true;
+              }}
+              aria-label="Dismiss tilt banner"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      {/if}
+
       <!-- Matches -->
       <div class="grid gap-4">
         {#each currentProfile.matches as match (match.matchId)}
@@ -424,6 +530,21 @@ import { Search, Save } from "lucide-svelte";
         {/each}
       </div>
 
+      <!-- Load more button -->
+      <div class="mt-6 flex justify-center">
+        {#if hasMore}
+          <button
+            onclick={loadMore}
+            disabled={isLoadingMore}
+            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingMore ? "Loading..." : "Load more"}
+          </button>
+        {:else}
+          <p class="text-gray-400 text-center">All matches loaded</p>
+        {/if}
+      </div>
+
       {#if reflectionModalOpen && selectedMatch}
         <div
           class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
@@ -435,12 +556,6 @@ import { Search, Save } from "lucide-svelte";
               <h2 class="text-xl font-bold">
                 Journal reflection - {selectedMatch.champion}
               </h2>
-              <button
-                class="text-sm px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
-                onclick={() => (showStats = !showStats)}
-              >
-                {showStats ? "Hide Stats" : "Show Stats"}
-              </button>
             </div>
 
             <p class="text-sm text-gray-300 mb-3">
@@ -448,66 +563,58 @@ import { Search, Save } from "lucide-svelte";
                 .deaths}/{selectedMatch.kda.assists} • {selectedMatch.result.toUpperCase()}
             </p>
 
-            {#if showStats}
-              <!-- Stats Dashboard Grid -->
-              <div class="mb-4 p-4 bg-gray-800 rounded border border-gray-700">
-                <h3 class="text-sm font-semibold mb-3">Performance Stats</h3>
-                <div class="grid grid-cols-2 gap-3 mb-3">
-                  <!-- CS/Min -->
-                  <div class="bg-gray-700 p-3 rounded">
-                    <p class="text-xs text-gray-400 mb-1">CS/Min</p>
-                    <p
-                      class="text-2xl font-bold {matchStats.csPerMin > 8
-                        ? 'text-green-400'
-                        : matchStats.csPerMin < 5
-                          ? 'text-red-400'
-                          : 'text-gray-300'}"
-                    >
-                      {matchStats.csPerMin.toFixed(2)}
-                    </p>
-                  </div>
-
-                  <!-- Gold/Min -->
-                  <div class="bg-gray-700 p-3 rounded">
-                    <p class="text-xs text-gray-400 mb-1">Gold/Min</p>
-                    <p class="text-2xl font-bold text-yellow-400">
-                      {matchStats.goldPerMin.toFixed(2)}
-                    </p>
-                  </div>
-
-                  <!-- Kill Participation -->
-                  <div class="bg-gray-700 p-3 rounded">
-                    <p class="text-xs text-gray-400 mb-1">Kill Participation</p>
-                    <p
-                      class="text-2xl font-bold {matchStats.kpPercent > 50
-                        ? 'text-blue-400'
+            <!-- Stats Dashboard Grid -->
+            <div class="mb-4 p-4 bg-gray-800 rounded border border-gray-700">
+              <h3 class="text-sm font-semibold mb-3">Performance Stats</h3>
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <!-- CS/Min -->
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="text-xs text-gray-400 mb-1">CS/Min</p>
+                  <p
+                    class="text-2xl font-bold {matchStats.csPerMin > 8
+                      ? 'text-green-400'
+                      : matchStats.csPerMin < 5
+                        ? 'text-red-400'
                         : 'text-gray-300'}"
-                    >
-                      {matchStats.kpPercent.toFixed(1)}%
-                    </p>
-                  </div>
-
-                  <!-- Death Contribution -->
-                  <div class="bg-gray-700 p-3 rounded">
-                    <p class="text-xs text-gray-400 mb-1">Death Contribution</p>
-                    <p
-                      class="text-2xl font-bold {matchStats.deathPercent > 50
-                        ? 'text-red-500'
-                        : 'text-gray-300'}"
-                    >
-                      {matchStats.deathPercent.toFixed(1)}%
-                    </p>
-                  </div>
+                  >
+                    {matchStats.csPerMin.toFixed(2)}
+                  </p>
                 </div>
 
-                <button
-                  onclick={copyStatsToReflection}
-                  class="w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 rounded transition"
-                >
-                  Copy Stats to Reflection
-                </button>
+                <!-- Gold/Min -->
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="text-xs text-gray-400 mb-1">Gold/Min</p>
+                  <p class="text-2xl font-bold text-yellow-400">
+                    {matchStats.goldPerMin.toFixed(2)}
+                  </p>
+                </div>
+
+                <!-- Kill Participation -->
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="text-xs text-gray-400 mb-1">Kill Participation</p>
+                  <p
+                    class="text-2xl font-bold {matchStats.kpPercent > 50
+                      ? 'text-blue-400'
+                      : 'text-gray-300'}"
+                  >
+                    {matchStats.kpPercent.toFixed(1)}%
+                  </p>
+                </div>
+
+                <!-- Death Contribution -->
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="text-xs text-gray-400 mb-1">Death Contribution</p>
+                  <p
+                    class="text-2xl font-bold {matchStats.deathPercent > 50
+                      ? 'text-red-500'
+                      : 'text-gray-300'}"
+                  >
+                    {matchStats.deathPercent.toFixed(1)}%
+                  </p>
+                </div>
               </div>
-            {/if}
+
+            </div>
 
             <textarea
               bind:value={reflectionText}

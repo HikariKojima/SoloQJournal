@@ -4,6 +4,7 @@
   import CoachingPanel from "$lib/components/CoachingPanel.svelte";
   import type { MatchSummaryResponse } from "$lib/types";
   import type { LeagueEntry, MatchHistoryStats } from "$lib/utils/coaching";
+  import { championIcon } from "$lib/utils/ddragon";
 
   let {
     match,
@@ -20,6 +21,7 @@
   } = $props();
 
   let showCoaching = $state(false);
+  let championImageFailed = $state(false);
 
   const csPerMin = $derived.by(() => {
     if (match.durationSeconds === 0) return 0;
@@ -46,14 +48,36 @@
   }}
 >
   <div class="flex justify-between items-center gap-4">
-    <div>
-      <h3 class="text-lg font-semibold">{match.champion}</h3>
-      <p class="text-sm text-gray-300">
-        {match.kda.kills}/{match.kda.deaths}/{match.kda.assists}
-        {#if match.kda.ratio}
-          ({match.kda.ratio.toFixed(2)} KDA)
-        {/if}
-      </p>
+    <div class="flex items-center gap-3">
+      {#if championImageFailed}
+        <div
+          class="flex items-center justify-center text-sm font-semibold bg-gray-700 text-gray-100 ring-2 {match.result === 'win' ? 'ring-blue-500' : 'ring-red-500'}"
+          style="width: 56px; height: 56px; border-radius: 50%;"
+        >
+          {match.champion.slice(0, 2).toUpperCase()}
+        </div>
+      {:else}
+        <img
+          src={championIcon(match.champion.replaceAll(" ", ""))}
+          alt={match.champion}
+          width="56"
+          height="56"
+          class="ring-2 {match.result === 'win' ? 'ring-blue-500' : 'ring-red-500'}"
+          style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover;"
+          onerror={() => {
+            championImageFailed = true;
+          }}
+        />
+      {/if}
+      <div>
+        <h3 class="text-lg font-semibold">{match.champion}</h3>
+        <p class="text-sm text-gray-300">
+          {match.kda.kills}/{match.kda.deaths}/{match.kda.assists}
+          {#if match.kda.ratio}
+            ({match.kda.ratio.toFixed(2)} KDA)
+          {/if}
+        </p>
+      </div>
     </div>
     <div class="text-right flex items-center gap-3">
       <button
@@ -93,3 +117,4 @@
     </button>
   {/if}
 </div>
+  
