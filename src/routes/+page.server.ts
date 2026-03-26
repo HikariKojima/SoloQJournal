@@ -27,5 +27,4 @@ export const load: PageServerLoad = async ({ url }) => {
   }
 
   return { profileData, platform };
-
 };

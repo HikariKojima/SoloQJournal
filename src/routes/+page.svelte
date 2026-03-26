@@ -1,10 +1,10 @@
 <script lang="ts">
   import MatchCard from "$lib/components/MatchCard.svelte";
-import { profileStore } from "$lib/profile.svelte";
-import type { PageData } from "./$types";
-import type { ProfileData } from "$lib/types";
-import { buildHistoryStats } from "$lib/utils/coaching";
-import { Search, Save } from "lucide-svelte";
+  import { profileStore } from "$lib/profile.svelte";
+  import type { PageData } from "./$types";
+  import type { ProfileData } from "$lib/types";
+  import { buildHistoryStats } from "$lib/utils/coaching";
+  import { Search, Save } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -147,20 +147,26 @@ import { Search, Save } from "lucide-svelte";
     profileStore.addProfile(profile);
   }
 
-  async function loadProfile(profile: ProfileData & { region?: string; gameName: string; tagLine: string }) {
+  async function loadProfile(
+    profile: ProfileData & {
+      region?: string;
+      gameName: string;
+      tagLine: string;
+    },
+  ) {
     // Set the region, game name, and tag line from the profile
     // Fallback to current selectedRegion if profile doesn't have region (for old saved profiles)
     selectedRegion = profile.region || selectedRegion || "euw1";
     gameName = profile.gameName;
     tagLine = profile.tagLine;
-    
+
     // Trigger the search with the loaded profile data
     await handleSearch();
   }
 
   async function loadMore() {
     if (!currentProfile || isLoadingMore || !hasMore) return;
-    
+
     isLoadingMore = true;
     try {
       const nextOffset = offset + 10;
@@ -168,15 +174,15 @@ import { Search, Save } from "lucide-svelte";
         `/api/summoner?gameName=${encodeURIComponent(currentSearchGameName)}&tagLine=${encodeURIComponent(currentSearchTagLine)}&platform=${encodeURIComponent(selectedRegion)}&offset=${nextOffset}`,
       );
       if (!res.ok) throw new Error(await res.text());
-      
+
       const response = await res.json();
       const newMatches = response.matches || [];
-      
+
       // Append new matches to existing list
       if (currentProfile.matches) {
         currentProfile.matches = [...currentProfile.matches, ...newMatches];
       }
-      
+
       // Update offset and check if there are more matches
       offset = nextOffset;
       if (newMatches.length < 10) {
@@ -195,7 +201,10 @@ import { Search, Save } from "lucide-svelte";
     if (!currentProfile?.matches?.length) {
       return buildHistoryStats([], "");
     }
-    return buildHistoryStats(currentProfile.matches, currentProfile.summoner.puuid);
+    return buildHistoryStats(
+      currentProfile.matches,
+      currentProfile.summoner.puuid,
+    );
   });
 
   const winRate = $derived.by(() => {
@@ -238,9 +247,10 @@ import { Search, Save } from "lucide-svelte";
       const participant = match?.info?.participants?.find(
         (p: any) => p.puuid === viewerPuuid,
       );
-      const didWin = typeof participant?.win === "boolean"
-        ? participant.win
-        : match?.result === "win";
+      const didWin =
+        typeof participant?.win === "boolean"
+          ? participant.win
+          : match?.result === "win";
 
       const playedAt =
         match?.info?.gameEndTimestamp ??
@@ -285,20 +295,22 @@ import { Search, Save } from "lucide-svelte";
     }
 
     const durationMinutes = selectedMatch.durationSeconds / 60;
-    const csPerMin = durationMinutes > 0
-      ? Math.round(((selectedMatch.stats.cs / durationMinutes) * 100)) / 100
-      : 0;
-    const goldPerMin = durationMinutes > 0
-      ? Math.round(((selectedMatch.stats.gold / durationMinutes) * 100)) / 100
-      : 0;
+    const csPerMin =
+      durationMinutes > 0
+        ? Math.round((selectedMatch.stats.cs / durationMinutes) * 100) / 100
+        : 0;
+    const goldPerMin =
+      durationMinutes > 0
+        ? Math.round((selectedMatch.stats.gold / durationMinutes) * 100) / 100
+        : 0;
 
     // Kill Participation: (kills + assists) / teamKills * 100
     const kpPercent =
       selectedMatch.teamKills > 0
         ? Math.round(
-            (((selectedMatch.kda.kills + selectedMatch.kda.assists) /
+            ((selectedMatch.kda.kills + selectedMatch.kda.assists) /
               selectedMatch.teamKills) *
-              100) *
+              100 *
               100,
           ) / 100
         : 0;
@@ -307,8 +319,7 @@ import { Search, Save } from "lucide-svelte";
     const deathPercent =
       selectedMatch.teamDeaths > 0
         ? Math.round(
-            ((selectedMatch.kda.deaths / selectedMatch.teamDeaths) * 100) *
-              100,
+            (selectedMatch.kda.deaths / selectedMatch.teamDeaths) * 100 * 100,
           ) / 100
         : 0;
 
@@ -334,7 +345,6 @@ import { Search, Save } from "lucide-svelte";
     reflectionText = "";
     reflectionError = "";
   }
-
 
   function saveReflection() {
     if (!currentProfile || !selectedMatch) return;
@@ -492,7 +502,8 @@ import { Search, Save } from "lucide-svelte";
         <div class="mb-4 bg-zinc-900 border-l-4 border-amber-500 p-3 rounded">
           <div class="flex items-center justify-between gap-3">
             <p class="text-sm text-amber-100">
-              {tiltState.streakLength}-game losing streak. Consider taking a break.
+              {tiltState.streakLength}-game losing streak. Consider taking a
+              break.
             </p>
             <button
               type="button"
@@ -613,7 +624,6 @@ import { Search, Save } from "lucide-svelte";
                   </p>
                 </div>
               </div>
-
             </div>
 
             <textarea

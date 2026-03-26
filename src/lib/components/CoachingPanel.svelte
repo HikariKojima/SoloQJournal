@@ -18,7 +18,9 @@
   let hasReviewed = $state(false);
 
   const cache: Record<string, string> = {};
-  const storageKey = $derived.by(() => `lol-coaching:${playerPuuid}:${match.matchId}`);
+  const storageKey = $derived.by(
+    () => `lol-coaching:${playerPuuid}:${match.matchId}`,
+  );
 
   $effect(() => {
     if (typeof window === "undefined") return;
@@ -45,7 +47,12 @@
     coachingText = "";
 
     try {
-      const payload = buildCoachingPayload(match, playerPuuid, [match], leagueEntry);
+      const payload = buildCoachingPayload(
+        match,
+        playerPuuid,
+        [match],
+        leagueEntry,
+      );
       payload.history = history;
 
       const res = await fetch("/api/coaching", {
@@ -97,11 +104,13 @@
   {/if}
 
   {#if isLoading}
-    <div class="mt-3 animate-pulse text-amber-300">Analyzing... </div>
+    <div class="mt-3 animate-pulse text-amber-300">Analyzing...</div>
   {/if}
 
   {#if error}
-    <div class="mt-3 rounded-md bg-red-900 p-2 text-sm text-red-100">{error}</div>
+    <div class="mt-3 rounded-md bg-red-900 p-2 text-sm text-red-100">
+      {error}
+    </div>
   {/if}
 
   {#if coachingText}

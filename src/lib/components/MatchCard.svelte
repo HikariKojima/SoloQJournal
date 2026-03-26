@@ -51,7 +51,10 @@
     <div class="flex items-center gap-3">
       {#if championImageFailed}
         <div
-          class="flex items-center justify-center text-sm font-semibold bg-gray-700 text-gray-100 ring-2 {match.result === 'win' ? 'ring-blue-500' : 'ring-red-500'}"
+          class="flex items-center justify-center text-sm font-semibold bg-gray-700 text-gray-100 ring-2 {match.result ===
+          'win'
+            ? 'ring-blue-500'
+            : 'ring-red-500'}"
           style="width: 56px; height: 56px; border-radius: 50%;"
         >
           {match.champion.slice(0, 2).toUpperCase()}
@@ -62,7 +65,9 @@
           alt={match.champion}
           width="56"
           height="56"
-          class="ring-2 {match.result === 'win' ? 'ring-blue-500' : 'ring-red-500'}"
+          class="ring-2 {match.result === 'win'
+            ? 'ring-blue-500'
+            : 'ring-red-500'}"
           style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover;"
           onerror={() => {
             championImageFailed = true;
@@ -90,31 +95,32 @@
       >
         <Sparkles class="h-4 w-4" />
         AI Coach
-        <ChevronDown class={`h-4 w-4 transition-transform ${showCoaching ? "rotate-180" : ""}`} />
+        <ChevronDown
+          class={`h-4 w-4 transition-transform ${showCoaching ? "rotate-180" : ""}`}
+        />
       </button>
 
       <div>
-      <p class="text-sm">CS/min: {csPerMin}</p>
-      <p class="text-sm">
-        Duration: {Math.floor(match.durationSeconds / 60)}:{(
-          match.durationSeconds % 60
-        )
-          .toString()
-          .padStart(2, "0")}
-      </p>
+        <p class="text-sm">CS/min: {csPerMin}</p>
+        <p class="text-sm">
+          Duration: {Math.floor(match.durationSeconds / 60)}:{(
+            match.durationSeconds % 60
+          )
+            .toString()
+            .padStart(2, "0")}
+        </p>
       </div>
     </div>
   </div>
 
   {#if showCoaching}
-    <button type="button" class="mt-4" transition:slide={{ duration: 150 }} onclick={(event) => event.stopPropagation()}>
-      <CoachingPanel
-        {match}
-        {history}
-        {playerPuuid}
-        {leagueEntry}
-      />
+    <button
+      type="button"
+      class="mt-4"
+      transition:slide={{ duration: 150 }}
+      onclick={(event) => event.stopPropagation()}
+    >
+      <CoachingPanel {match} {history} {playerPuuid} {leagueEntry} />
     </button>
   {/if}
 </div>
-  

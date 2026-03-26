@@ -8,7 +8,12 @@
 
 import { json, error } from "@sveltejs/kit";
 import type { RequestEvent } from "@sveltejs/kit";
-import { getFullProfile, getMatchSummaries, getSummonerByRiotId, getSummonerByPuuid } from "$lib/server/riot.service";
+import {
+  getFullProfile,
+  getMatchSummaries,
+  getSummonerByRiotId,
+  getSummonerByPuuid,
+} from "$lib/server/riot.service";
 
 export async function GET({ url }: RequestEvent) {
   const gameName = url.searchParams.get("gameName");
@@ -31,7 +36,12 @@ export async function GET({ url }: RequestEvent) {
       // Fetch only the new matches at the offset
       const account = await getSummonerByRiotId(gameName, tagLine, platform);
       const region = platform;
-      const matches = await getMatchSummaries(region, account.puuid, offset, 10);
+      const matches = await getMatchSummaries(
+        region,
+        account.puuid,
+        offset,
+        10,
+      );
       return json({ matches });
     }
   } catch (err: any) {
