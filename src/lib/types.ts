@@ -33,6 +33,11 @@ export type MatchSummaryResponse = {
   };
   teamKills: number;
   teamDeaths: number;
+  items?: number[];
+  summonerSpells?: {
+    primary: number;
+    secondary: number;
+  };
 };
 
 export type MatchDetailsResponse = {

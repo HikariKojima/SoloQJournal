@@ -29,8 +29,21 @@ class ProfileStore {
   }
 
   addProfile(profile: SavedProfile) {
-    this.list.push(profile);
-    this.activeIndex = this.list.length - 1;
+    const existingIndex = this.list.findIndex(
+      (p) =>
+        p.gameName.toLowerCase() === profile.gameName.toLowerCase() &&
+        p.tagLine.toLowerCase() === profile.tagLine.toLowerCase() &&
+        p.region === profile.region,
+    );
+
+    if (existingIndex !== -1) {
+      // Update existing profile with new data and set as active
+      this.list[existingIndex] = profile;
+      this.activeIndex = existingIndex;
+    } else {
+      this.list.push(profile);
+      this.activeIndex = this.list.length - 1;
+    }
   }
 
   setActive(index: number) {

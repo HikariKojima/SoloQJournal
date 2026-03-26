@@ -174,8 +174,14 @@ export async function getMatchSummaries(
       const teamParticipants = data.info.participants.filter(
         (p: any) => p.teamId === teamId,
       );
-      const teamKills = teamParticipants.reduce((sum: number, p: any) => sum + p.kills, 0);
-      const teamDeaths = teamParticipants.reduce((sum: number, p: any) => sum + p.deaths, 0);
+      const teamKills = teamParticipants.reduce(
+        (sum: number, p: any) => sum + p.kills,
+        0,
+      );
+      const teamDeaths = teamParticipants.reduce(
+        (sum: number, p: any) => sum + p.deaths,
+        0,
+      );
 
       const kda = {
         kills: participant.kills,
@@ -200,6 +206,21 @@ export async function getMatchSummaries(
         },
         teamKills,
         teamDeaths,
+        items: [
+          participant.item0,
+          participant.item1,
+          participant.item2,
+          participant.item3,
+          participant.item4,
+          participant.item5,
+          participant.item6,
+        ].filter(
+          (id: number | null | undefined) => typeof id === "number" && id > 0,
+        ),
+        summonerSpells: {
+          primary: participant.summoner1Id,
+          secondary: participant.summoner2Id,
+        },
       });
     } catch (err) {
       console.error(`Failed to fetch match ${matchId}:`, err);

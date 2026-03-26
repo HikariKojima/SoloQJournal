@@ -4,7 +4,7 @@
   import type { PageData } from "./$types";
   import type { ProfileData } from "$lib/types";
   import { buildHistoryStats } from "$lib/utils/coaching";
-  import { Search, Save } from "lucide-svelte";
+  import { Search } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -111,15 +111,37 @@
     loading = true;
     error = "";
     try {
+      const trimmedGameName = gameName.trim();
+      const normalizedTagLine = tagLine.trim();
+
+      if (!trimmedGameName || !normalizedTagLine) {
+        error = "Please enter both game name and tag line.";
+        return;
+      }
+
       // Strip the # from tagLine for the API request
-      const cleanTagLine = tagLine.substring(1);
+      const cleanTagLine = normalizedTagLine.substring(1);
       const res = await fetch(
-        `/api/summoner?gameName=${encodeURIComponent(gameName)}&tagLine=${encodeURIComponent(cleanTagLine)}&platform=${encodeURIComponent(selectedRegion)}`,
+        `/api/summoner?gameName=${encodeURIComponent(trimmedGameName)}&tagLine=${encodeURIComponent(cleanTagLine)}&platform=${encodeURIComponent(selectedRegion)}`,
       );
       if (!res.ok) throw new Error(await res.text());
-      searchedProfile = await res.json();
+      const fetchedProfile: ProfileData | null = await res.json();
+      if (!fetchedProfile) {
+        throw new Error("Profile response was empty.");
+      }
+      searchedProfile = fetchedProfile;
+
+      profileStore.addProfile({
+        gameName: trimmedGameName,
+        tagLine: normalizedTagLine,
+        region: selectedRegion,
+        summoner: fetchedProfile.summoner,
+        matches: fetchedProfile.matches,
+        lastFetched: new Date().toISOString(),
+      });
+
       // Store the search parameters for load more
-      currentSearchGameName = gameName;
+      currentSearchGameName = trimmedGameName;
       currentSearchTagLine = cleanTagLine;
       // Clear the input fields after successful fetch
       gameName = "";
@@ -132,19 +154,6 @@
     } finally {
       loading = false;
     }
-  }
-
-  function saveProfile() {
-    if (!searchedProfile) return;
-    const profile = {
-      gameName,
-      tagLine,
-      region: selectedRegion,
-      summoner: searchedProfile.summoner,
-      matches: searchedProfile.matches,
-      lastFetched: new Date().toISOString(),
-    };
-    profileStore.addProfile(profile);
   }
 
   async function loadProfile(
@@ -396,9 +405,9 @@
     <h2 class="text-xl font-bold mb-4">Saved Profiles</h2>
     <ul class="space-y-2">
       {#each profileStore.list as profile, i}
-        <li>
+        <li class="flex items-center gap-2">
           <button
-            class="w-full text-left p-2 rounded hover:bg-gray-700 transition {i ===
+            class="flex-1 text-left p-2 rounded hover:bg-gray-700 transition {i ===
             profileStore.activeIndex
               ? 'bg-gray-700'
               : ''}"
@@ -408,6 +417,17 @@
             }}
           >
             {profile.gameName}{profile.tagLine}
+          </button>
+          <button
+            type="button"
+            class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 rounded"
+            aria-label={`Delete saved profile ${profile.gameName}${profile.tagLine}`}
+            onclick={(event) => {
+              event.stopPropagation();
+              profileStore.removeProfile(i);
+            }}
+          >
+            Delete
           </button>
         </li>
       {/each}
@@ -468,15 +488,6 @@
           <Search size={16} />
           {loading ? "Searching..." : "Search"}
         </button>
-        {#if searchedProfile}
-          <button
-            onclick={saveProfile}
-            class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded flex items-center gap-2"
-          >
-            <Save size={16} />
-            Save Profile
-          </button>
-        {/if}
       </div>
 
       {#if tagLineError}
@@ -491,11 +502,24 @@
     {#if currentProfile}
       <!-- Profile info -->
       <div class="mb-6 p-4 bg-gray-800 rounded">
-        <h1 class="text-2xl font-bold">{currentProfile.summoner.name}</h1>
-        <p>Level: {currentProfile.summoner.level}</p>
-        {#if winRate !== null}
-          <p>Win Rate: {winRate}%</p>
-        {/if}
+        <div class="flex items-center gap-4">
+          {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
+            <img
+              src={`https://ddragon.leagueoflegends.com/cdn/14.24.1/img/profileicon/${currentProfile.summoner.profileIconId}.png`}
+              alt={`${currentProfile.summoner.name} profile icon`}
+              class="h-14 w-14 rounded-full border border-gray-600 object-cover"
+              loading="lazy"
+            />
+          {/if}
+
+          <div>
+            <h1 class="text-2xl font-bold">{currentProfile.summoner.name}</h1>
+            <p>Level: {currentProfile.summoner.level}</p>
+            {#if winRate !== null}
+              <p>Win Rate: {winRate}%</p>
+            {/if}
+          </div>
+        </div>
       </div>
 
       {#if tiltState.isTilting && !dismissed}

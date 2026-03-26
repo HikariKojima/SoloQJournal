@@ -4,7 +4,11 @@
   import CoachingPanel from "$lib/components/CoachingPanel.svelte";
   import type { MatchSummaryResponse } from "$lib/types";
   import type { LeagueEntry, MatchHistoryStats } from "$lib/utils/coaching";
-  import { championIcon } from "$lib/utils/ddragon";
+  import {
+    championIcon,
+    itemIcon,
+    summonerSpellIcon,
+  } from "$lib/utils/ddragon";
 
   let {
     match,
@@ -82,6 +86,49 @@
             ({match.kda.ratio.toFixed(2)} KDA)
           {/if}
         </p>
+        <div class="mt-2 flex items-center gap-3">
+          {#if match.summonerSpells}
+            <div class="flex flex-col gap-1">
+              {#if match.summonerSpells.primary}
+                <img
+                  src={summonerSpellIcon(match.summonerSpells.primary)}
+                  alt="Primary summoner spell"
+                  width="26"
+                  height="26"
+                  class="h-6 w-6 rounded border border-gray-700 bg-black/40"
+                  loading="lazy"
+                />
+              {/if}
+              {#if match.summonerSpells.secondary}
+                <img
+                  src={summonerSpellIcon(match.summonerSpells.secondary)}
+                  alt="Secondary summoner spell"
+                  width="26"
+                  height="26"
+                  class="h-6 w-6 rounded border border-gray-700 bg-black/40"
+                  loading="lazy"
+                />
+              {/if}
+            </div>
+          {/if}
+
+          {#if match.items && match.items.length}
+            <div class="flex flex-wrap gap-1">
+              {#each match.items as itemId (itemId)}
+                {#if itemId}
+                  <img
+                    src={itemIcon(itemId)}
+                    alt={"Item " + itemId}
+                    width="24"
+                    height="24"
+                    class="h-6 w-6 rounded border border-gray-700 bg-black/40"
+                    loading="lazy"
+                  />
+                {/if}
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
     <div class="text-right flex items-center gap-3">
