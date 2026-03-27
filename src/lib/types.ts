@@ -33,6 +33,12 @@ export type MatchSummaryResponse = {
   };
   teamKills: number;
   teamDeaths: number;
+   /** Total damage dealt to champions, for DPM calculations */
+   damageToChamps?: number;
+   /** When the game ended, in milliseconds since epoch */
+   playedAt?: number;
+   /** Queue identifier (e.g., 420 Solo/Duo) */
+   queueId?: number;
   items?: number[];
   summonerSpells?: {
     primary: number;

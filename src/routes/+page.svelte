@@ -4,7 +4,8 @@
   import type { PageData } from "./$types";
   import type { ProfileData } from "$lib/types";
   import { buildHistoryStats } from "$lib/utils/coaching";
-  import { Search } from "lucide-svelte";
+  import { championIcon } from "$lib/utils/ddragon";
+  import { Search, ChevronDown } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -224,6 +225,123 @@
     return Math.round((wins / currentProfile.matches.length) * 100);
   });
 
+  const groupedMatchDays = $derived.by(() => {
+    const matches = currentProfile?.matches ?? [];
+    if (!matches.length)
+      return [] as Array<{
+        dateKey: string;
+        dateLabel: string;
+        matches: typeof matches;
+        wins: number;
+        losses: number;
+      }>;
+
+    const byDay = new Map<
+      string,
+      {
+        dateKey: string;
+        timestamp: number;
+        matches: typeof matches;
+        wins: number;
+        losses: number;
+      }
+    >();
+
+    for (const match of matches as Array<any>) {
+      const rawPlayed =
+        match?.playedAt ??
+        match?.info?.gameEndTimestamp ??
+        match?.info?.gameStartTimestamp ??
+        match?.gameEndTimestamp ??
+        match?.gameStartTimestamp ??
+        null;
+
+      const playedAt =
+        typeof rawPlayed === "number" && rawPlayed > 0 ? rawPlayed : null;
+
+      const date = playedAt ? new Date(playedAt) : null;
+      const dateKey = date
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+        : "unknown";
+
+      let group = byDay.get(dateKey);
+      if (!group) {
+        group = {
+          dateKey,
+          timestamp: date ? date.getTime() : 0,
+          matches: [],
+          wins: 0,
+          losses: 0,
+        };
+        byDay.set(dateKey, group);
+      }
+
+      group.matches.push(match);
+
+      if (match.result === "win") {
+        group.wins += 1;
+      } else if (match.result === "loss") {
+        group.losses += 1;
+      }
+    }
+
+    return Array.from(byDay.values())
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map((group) => {
+        let dateLabel = "UNKNOWN DATE";
+        if (group.dateKey !== "unknown" && group.timestamp) {
+          const d = new Date(group.timestamp);
+          const day = d.getDate();
+          const month = d
+            .toLocaleString(undefined, { month: "short" })
+            .toUpperCase();
+          dateLabel = `${day} ${month}`;
+        }
+        return {
+          dateKey: group.dateKey,
+          dateLabel,
+          matches: group.matches,
+          wins: group.wins,
+          losses: group.losses,
+        };
+      });
+  });
+
+  let selectedChampion = $state<string | null>(null);
+  let isChampionFilterOpen = $state(false);
+  let championFilterDropdownEl = $state<HTMLElement | null>(null);
+
+  const championFilterOptions = $derived.by(() => {
+    const matches = (currentProfile?.matches ?? []) as Array<any>;
+    if (!matches.length) return [];
+
+    const counts = new Map<string, number>();
+    for (const match of matches) {
+      const champion = match?.champion;
+      if (!champion) continue;
+      counts.set(champion, (counts.get(champion) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([champion, count]) => ({ champion, count }));
+  });
+
+  const filteredMatchDays = $derived.by(() => {
+    const days = (groupedMatchDays as any[]) ?? [];
+    if (!days.length) return [];
+    if (!selectedChampion) return days;
+
+    return days
+      .map((day: any) => ({
+        ...day,
+        matches: (day.matches ?? []).filter(
+          (m: any) => m?.champion === selectedChampion,
+        ),
+      }))
+      .filter((day: any) => day.matches.length > 0);
+  });
+
   let reflectionModalOpen = $state(false);
   let selectedMatch = $state<import("$lib/types").MatchSummaryResponse | null>(
     null,
@@ -262,6 +380,7 @@
           : match?.result === "win";
 
       const playedAt =
+        match?.playedAt ??
         match?.info?.gameEndTimestamp ??
         match?.info?.gameStartTimestamp ??
         match?.gameEndTimestamp ??
@@ -397,14 +516,38 @@
       localStorage.setItem("lol-profiles", JSON.stringify(profileStore.list));
     }
   });
+
+  function toggleChampionFilter() {
+    isChampionFilterOpen = !isChampionFilterOpen;
+  }
+
+  function selectChampion(champion: string | null) {
+    selectedChampion = champion;
+    isChampionFilterOpen = false;
+  }
+
+  function handleChampionFilterOutsideClick(event: MouseEvent) {
+    if (!isChampionFilterOpen) return;
+
+    const target = event.target as Node | null;
+    if (championFilterDropdownEl && target) {
+      if (championFilterDropdownEl.contains(target)) {
+        return;
+      }
+    }
+
+    isChampionFilterOpen = false;
+  }
 </script>
 
-<div class="min-h-screen bg-gray-900 text-white flex">
+<svelte:window on:click={handleChampionFilterOutsideClick} />
+
+<div class="min-h-screen flex flex-col lg:flex-row match-page">
   <!-- Sidebar -->
-  <aside class="w-64 bg-gray-800 p-4">
+  <aside class="w-full lg:w-64 p-4 match-sidebar">
     <h2 class="text-xl font-bold mb-4">Saved Profiles</h2>
     <ul class="space-y-2">
-      {#each profileStore.list as profile, i}
+      {#each profileStore.list as profile, i (profile.gameName + profile.tagLine)}
         <li class="flex items-center gap-2">
           <button
             class="flex-1 text-left p-2 rounded hover:bg-gray-700 transition {i ===
@@ -448,7 +591,7 @@
           bind:value={selectedRegion}
           class="w-40 p-2 bg-gray-800 border border-gray-600 rounded"
         >
-          {#each regionOptions as region}
+          {#each regionOptions as region (region.value)}
             <option value={region.value}>{region.label}</option>
           {/each}
         </select>
@@ -501,7 +644,7 @@
 
     {#if currentProfile}
       <!-- Profile info -->
-      <div class="mb-6 p-4 bg-gray-800 rounded">
+      <div class="mb-6 p-4 match-profile-card">
         <div class="flex items-center gap-4">
           {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
             <img
@@ -523,9 +666,9 @@
       </div>
 
       {#if tiltState.isTilting && !dismissed}
-        <div class="mb-4 bg-zinc-900 border-l-4 border-amber-500 p-3 rounded">
+        <div class="mb-4 match-tilt-banner p-3 rounded">
           <div class="flex items-center justify-between gap-3">
-            <p class="text-sm text-amber-100">
+            <p class="text-sm match-tilt-banner-text">
               {tiltState.streakLength}-game losing streak. Consider taking a
               break.
             </p>
@@ -543,25 +686,103 @@
         </div>
       {/if}
 
-      <!-- Matches -->
-      <div class="grid gap-4">
-        {#each currentProfile.matches as match (match.matchId)}
-          <div class="relative">
-            <MatchCard
-              {match}
-              history={computedHistory}
-              playerPuuid={currentProfile.summoner.puuid}
-              leagueEntry={null}
-              onMatchSelect={openReflection}
-            />
-            {#if getReflection(match)}
-              <span
-                class="absolute top-2 right-2 px-2 py-1 text-xs bg-green-600 rounded"
+      <!-- Filters -->
+      <div class="match-filter-bar">
+        <div>
+          <p class="match-filter-label">Match history</p>
+          <p class="match-filter-help">Filter games by champion</p>
+        </div>
+        <div class="match-filter-dropdown" bind:this={championFilterDropdownEl}>
+          <button
+            type="button"
+            class="match-filter-trigger"
+            onclick={toggleChampionFilter}
+          >
+            <div class="match-filter-trigger-main">
+              {#if selectedChampion}
+                <img
+                  src={championIcon(selectedChampion.replaceAll(" ", ""))}
+                  alt={selectedChampion}
+                  width="24"
+                  height="24"
+                  loading="lazy"
+                />
+                <span>{selectedChampion}</span>
+              {:else}
+                <span>All champions</span>
+              {/if}
+            </div>
+            <ChevronDown class="match-filter-trigger-chevron" />
+          </button>
+
+          {#if isChampionFilterOpen}
+            <div class="match-filter-menu">
+              <button
+                type="button"
+                class={`match-filter-option ${selectedChampion ? "" : "match-filter-option--active"}`}
+                onclick={() => selectChampion(null)}
               >
-                Reflection saved
-              </span>
-            {/if}
-          </div>
+                <div class="match-filter-option-main">
+                  <span class="match-filter-option-pill">All</span>
+                  <span>All champions</span>
+                </div>
+              </button>
+
+              {#each championFilterOptions as option (option.champion)}
+                <button
+                  type="button"
+                  class={`match-filter-option ${selectedChampion === option.champion ? "match-filter-option--active" : ""}`}
+                  onclick={() => selectChampion(option.champion)}
+                >
+                  <div class="match-filter-option-main">
+                    <img
+                      src={championIcon(option.champion.replaceAll(" ", ""))}
+                      alt={option.champion}
+                      width="24"
+                      height="24"
+                      loading="lazy"
+                    />
+                    <span>{option.champion}</span>
+                  </div>
+                  <span class="match-filter-option-count">
+                    {option.count}
+                  </span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Matches -->
+      <div class="match-days">
+        {#each filteredMatchDays as day (day.dateKey)}
+          <section>
+            <div class="match-day-header">
+              <span class="match-day-date">{day.dateLabel}</span>
+              <div class="match-day-badges">
+                <span class="match-day-badge match-day-badge--wins">
+                  {day.wins}W
+                </span>
+                <span class="match-day-badge match-day-badge--losses">
+                  {day.losses}L
+                </span>
+              </div>
+            </div>
+
+            <div class="match-day-list">
+              {#each day.matches as match (match.matchId)}
+                <MatchCard
+                  {match}
+                  history={computedHistory}
+                  playerPuuid={currentProfile.summoner.puuid}
+                  leagueEntry={null}
+                  hasReflection={!!getReflection(match)}
+                  onMatchSelect={openReflection}
+                />
+              {/each}
+            </div>
+          </section>
         {/each}
       </div>
 
@@ -576,7 +797,9 @@
             {isLoadingMore ? "Loading..." : "Load more"}
           </button>
         {:else}
-          <p class="text-gray-400 text-center">All matches loaded</p>
+          <p class="text-gray-400 text-center match-load-more">
+            All matches loaded
+          </p>
         {/if}
       </div>
 

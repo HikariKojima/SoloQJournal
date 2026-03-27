@@ -183,6 +183,11 @@ export async function getMatchSummaries(
         0,
       );
 
+      const damageToChamps = participant.totalDamageDealtToChampions;
+
+      const playedAt =
+        data.info.gameEndTimestamp ?? data.info.gameStartTimestamp ?? null;
+
       const kda = {
         kills: participant.kills,
         deaths: participant.deaths,
@@ -206,6 +211,9 @@ export async function getMatchSummaries(
         },
         teamKills,
         teamDeaths,
+         damageToChamps,
+         playedAt: typeof playedAt === "number" ? playedAt : undefined,
+         queueId: data.info.queueId,
         items: [
           participant.item0,
           participant.item1,
