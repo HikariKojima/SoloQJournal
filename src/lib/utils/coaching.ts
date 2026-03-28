@@ -7,11 +7,16 @@ export type LeagueEntry = {
 };
 
 export type MatchHistoryStats = {
+  sampleSize: number;
   avgCsPerMin: number;
   avgVisionScore: number;
   avgKillParticipation: number;
   avgDeaths: number;
   winRate: number;
+  belowAvgCsGames: number;
+  lowVisionGames: number;
+  lowKpGames: number;
+  highDeathGames: number;
   mostPlayedChampions: string[];
   primaryRole: string;
   recentForm: string;
@@ -29,39 +34,47 @@ export type CoachingPayload = {
     csPerMin: number;
     csVsOpponent: number | null;
     visionScore: number;
-    wardsPlaced: number;
-    wardsDestroyed: number;
-    damageDealt: number;
-    damageShare: number;
-    damageTaken: number;
+    wardsPlaced: number | null;
+    wardsDestroyed: number | null;
+    damageDealt: number | null;
+    damageShare: number | null;
+    damageTaken: number | null;
     goldEarned: number;
     goldDiff15: number | null;
     killParticipation: number;
-    objectivesStolen: number;
-    dragonKills: number;
-    baronKills: number;
-    firstBlood: boolean;
+    objectivesStolen: number | null;
+    dragonKills: number | null;
+    baronKills: number | null;
+    firstBlood: boolean | null;
     gameDurationMinutes: number;
     gameMode: string;
-    items: number[];
+    items: number[] | null;
   };
   history: MatchHistoryStats;
   context: {
     tier: string;
     rank: string;
-    lp: number; 
+    lp: number;
     summonerName: string;
   };
 };
 
-export function buildHistoryStats(matches: MatchSummaryResponse[], puuid: string): MatchHistoryStats {
+export function buildHistoryStats(
+  matches: MatchSummaryResponse[],
+  puuid: string,
+): MatchHistoryStats {
   if (!matches?.length) {
     return {
+      sampleSize: 0,
       avgCsPerMin: 0,
       avgVisionScore: 0,
       avgKillParticipation: 0,
       avgDeaths: 0,
       winRate: 0,
+      belowAvgCsGames: 0,
+      lowVisionGames: 0,
+      lowKpGames: 0,
+      highDeathGames: 0,
       mostPlayedChampions: [],
       primaryRole: "UNKNOWN",
       recentForm: "",
@@ -75,20 +88,33 @@ export function buildHistoryStats(matches: MatchSummaryResponse[], puuid: string
   let totalDeaths = 0;
   let wins = 0;
 
+  const csPerMinValues: number[] = [];
+  const visionValues: number[] = [];
+  const kpValues: number[] = [];
+  const deathValues: number[] = [];
+
   const championCounts: Record<string, number> = {};
   const roleCounts: Record<string, number> = {};
   const formParts: string[] = [];
 
   for (const match of historyList) {
-    const durationMin = match.durationSeconds > 0 ? match.durationSeconds / 60 : 1;
+    const durationMin =
+      match.durationSeconds > 0 ? match.durationSeconds / 60 : 1;
     const csPerMin = match.stats.cs / durationMin;
+    csPerMinValues.push(csPerMin);
+    visionValues.push(match.stats.visionScore);
+    deathValues.push(match.kda.deaths);
 
     totalCsPerMin += csPerMin;
     totalVision += match.stats.visionScore;
     totalDeaths += match.kda.deaths;
 
     if (match.teamKills > 0) {
-      totalKP += ((match.kda.kills + match.kda.assists) / match.teamKills) * 100;
+      const kp = ((match.kda.kills + match.kda.assists) / match.teamKills) * 100;
+      totalKP += kp;
+      kpValues.push(kp);
+    } else {
+      kpValues.push(0);
     }
 
     if (match.result === "win") {
@@ -109,19 +135,38 @@ export function buildHistoryStats(matches: MatchSummaryResponse[], puuid: string
   const avgDeaths = totalDeaths / historyList.length;
   const winRate = (wins / historyList.length) * 100;
 
+  const belowAvgCsGames = csPerMinValues.filter(
+    (value) => value < avgCsPerMin - 0.5,
+  ).length;
+  const lowVisionGames = visionValues.filter(
+    (value) => value < avgVisionScore - 5,
+  ).length;
+  const lowKpGames = kpValues.filter(
+    (value) => value < avgKillParticipation - 8,
+  ).length;
+  const highDeathGames = deathValues.filter(
+    (value) => value > avgDeaths + 2,
+  ).length;
+
   const mostPlayedChampions = Object.entries(championCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([champ]) => champ);
 
-  const primaryRole = Object.entries(roleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "UNKNOWN";
+  const primaryRole =
+    Object.entries(roleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "UNKNOWN";
 
   return {
+    sampleSize: historyList.length,
     avgCsPerMin: Math.round(avgCsPerMin * 100) / 100,
     avgVisionScore: Math.round(avgVisionScore * 100) / 100,
     avgKillParticipation: Math.round(avgKillParticipation * 100) / 100,
     avgDeaths: Math.round(avgDeaths * 100) / 100,
     winRate: Math.round(winRate * 10) / 10,
+    belowAvgCsGames,
+    lowVisionGames,
+    lowKpGames,
+    highDeathGames,
     mostPlayedChampions,
     primaryRole,
     recentForm: formParts.join(" "),
@@ -134,12 +179,21 @@ export function buildCoachingPayload(
   recentMatches: MatchSummaryResponse[],
   leagueEntry: LeagueEntry | null,
 ): CoachingPayload {
-  const gameDurationMinutes = match.durationSeconds > 0 ? Math.round((match.durationSeconds / 60) * 10) / 10 : 0;
-  const csPerMin = gameDurationMinutes > 0 ? Math.round((match.stats.cs / gameDurationMinutes) * 100) / 100 : 0;
+  const gameDurationMinutes =
+    match.durationSeconds > 0
+      ? Math.round((match.durationSeconds / 60) * 10) / 10
+      : 0;
+  const csPerMin =
+    gameDurationMinutes > 0
+      ? Math.round((match.stats.cs / gameDurationMinutes) * 100) / 100
+      : 0;
 
-  const killParticipation = match.teamKills > 0
-    ? Math.round((((match.kda.kills + match.kda.assists) / match.teamKills) * 100) * 100) / 100
-    : 0;
+  const killParticipation =
+    match.teamKills > 0
+      ? Math.round(
+          ((match.kda.kills + match.kda.assists) / match.teamKills) * 100 * 100,
+        ) / 100
+      : 0;
 
   const csVsOpponent = null;
 
@@ -161,21 +215,27 @@ export function buildCoachingPayload(
       csPerMin,
       csVsOpponent,
       visionScore: match.stats.visionScore,
-      wardsPlaced: 0,
-      wardsDestroyed: 0,
-      damageDealt: 0,
-      damageShare: 0,
-      damageTaken: 0,
+      wardsPlaced: null,
+      wardsDestroyed: null,
+      damageDealt:
+        typeof (match as any).damageToChamps === "number"
+          ? (match as any).damageToChamps
+          : null,
+      damageShare: null,
+      damageTaken: null,
       goldEarned: match.stats.gold,
       goldDiff15: null,
       killParticipation,
-      objectivesStolen: 0,
-      dragonKills: 0,
-      baronKills: 0,
-      firstBlood: false,
+      objectivesStolen: null,
+      dragonKills: null,
+      baronKills: null,
+      firstBlood: null,
       gameDurationMinutes,
       gameMode: (match as any).gameMode || "UNKNOWN",
-      items: [],
+      items:
+        Array.isArray((match as any).items) && (match as any).items.length > 0
+          ? (match as any).items
+          : null,
     },
     history,
     context: {
