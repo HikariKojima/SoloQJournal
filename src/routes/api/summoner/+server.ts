@@ -9,8 +9,8 @@
 import { json, error } from "@sveltejs/kit";
 import type { RequestEvent } from "@sveltejs/kit";
 import {
-  getFullProfile,
-  getMatchSummaries,
+  getAllFilteredMatchesForSeason,
+  getFilteredMatchPage,
   getSummonerByRiotId,
   getSummonerByPuuid,
 } from "$lib/server/riot.service";
@@ -20,6 +20,14 @@ export async function GET({ url }: RequestEvent) {
   const tagLine = url.searchParams.get("tagLine");
   const platform = url.searchParams.get("platform") ?? "euw1";
   const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const all = (url.searchParams.get("all") ?? "").toLowerCase() === "true";
+  const allLimit = Math.min(
+    Math.max(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 10),
+    150,
+  );
+  const champion = url.searchParams.get("champion") ?? undefined;
+  const opponentChampion =
+    url.searchParams.get("opponentChampion") ?? undefined;
 
   if (!gameName || !tagLine) {
     throw error(400, {
@@ -28,22 +36,58 @@ export async function GET({ url }: RequestEvent) {
   }
 
   try {
-    // If offset is 0, return full profile; otherwise return just the new matches
-    if (offset === 0) {
-      const profile = await getFullProfile(gameName, tagLine, platform);
-      return json(profile);
-    } else {
-      // Fetch only the new matches at the offset
-      const account = await getSummonerByRiotId(gameName, tagLine, platform);
-      const region = platform;
-      const matches = await getMatchSummaries(
+    const account = await getSummonerByRiotId(gameName, tagLine, platform);
+    const region = platform;
+    const filters = {
+      champion,
+      opponentChampion,
+    };
+
+    if (all) {
+      const matches = await getAllFilteredMatchesForSeason(
         region,
         account.puuid,
-        offset,
-        10,
+        filters,
+        allLimit,
       );
-      return json({ matches });
+      const hasMore = matches.length >= allLimit;
+
+      if (offset === 0) {
+        const summoner = await getSummonerByPuuid(region, account.puuid);
+        return json({
+          summoner,
+          matches,
+          nextOffset: 0,
+          hasMore,
+        });
+      }
+
+      return json({ matches, nextOffset: 0, hasMore });
     }
+
+    const page = await getFilteredMatchPage(
+      region,
+      account.puuid,
+      Number.isNaN(offset) ? 0 : offset,
+      10,
+      filters,
+    );
+
+    if (offset === 0) {
+      const summoner = await getSummonerByPuuid(region, account.puuid);
+      return json({
+        summoner,
+        matches: page.matches,
+        nextOffset: page.nextOffset,
+        hasMore: page.hasMore,
+      });
+    }
+
+    return json({
+      matches: page.matches,
+      nextOffset: page.nextOffset,
+      hasMore: page.hasMore,
+    });
   } catch (err: any) {
     throw error(400, { message: err.message || "Failed to fetch profile" });
   }

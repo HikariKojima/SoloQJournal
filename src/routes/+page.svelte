@@ -1,10 +1,15 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import MatchCard from "$lib/components/MatchCard.svelte";
   import { profileStore } from "$lib/profile.svelte";
   import type { PageData } from "./$types";
-  import type { ProfileData } from "$lib/types";
+  import type { MatchSummaryResponse, ProfileData } from "$lib/types";
   import { buildHistoryStats } from "$lib/utils/coaching";
-  import { championIcon } from "$lib/utils/ddragon";
+  import {
+    championIcon,
+    profileIcon,
+    setDdragonVersion,
+  } from "$lib/utils/ddragon";
   import { Search, ChevronDown } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
@@ -23,7 +28,7 @@
     {
       value: "euw1",
       label: "EUW",
-      gameNameExample: "Tarik",
+      gameNameExample: "Takir",
       tagLineSuffix: "euw1",
     },
     {
@@ -92,9 +97,15 @@
     if (data?.platform) selectedRegion = data.platform;
   });
 
+  $effect(() => {
+    if (data?.ddragonVersion) {
+      setDdragonVersion(data.ddragonVersion);
+    }
+  });
+
   const gameNamePlaceholder = $derived.by(() => {
     const found = regionOptions.find((r) => r.value === selectedRegion);
-    return found ? found.gameNameExample : "Tarik";
+    return found ? found.gameNameExample : "Takir";
   });
 
   const tagLinePlaceholder = $derived.by(() => {
@@ -102,23 +113,55 @@
     return found ? `#${found.tagLineSuffix}` : "#euw1";
   });
 
-  async function handleSearch() {
-    if (!gameName || !tagLine) return;
-    if (!tagLine.startsWith("#")) {
-      tagLineError = "Tag line must start with #";
-      return;
+  function normalizeTagLineInput(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const withoutHash = trimmed.replace(/^#+/, "").trim();
+    if (!withoutHash) return null;
+
+    return `#${withoutHash}`;
+  }
+
+  function createSummonerApiUrl(options?: {
+    offset?: number;
+    all?: boolean;
+    champion?: string | null;
+    opponentChampion?: string | null;
+  }): string {
+    const params = new URLSearchParams({
+      gameName: currentSearchGameName,
+      tagLine: currentSearchTagLine,
+      platform: selectedRegion,
+      offset: String(options?.offset ?? 0),
+    });
+
+    if (options?.all) params.set("all", "true");
+    if (options?.champion) params.set("champion", options.champion);
+    if (options?.opponentChampion) {
+      params.set("opponentChampion", options.opponentChampion);
     }
-    tagLineError = "";
+
+    return `/api/summoner?${params.toString()}`;
+  }
+
+  async function handleSearch() {
     loading = true;
     error = "";
     try {
       const trimmedGameName = gameName.trim();
-      const normalizedTagLine = tagLine.trim();
+      const normalizedTagLine = normalizeTagLineInput(tagLine);
 
       if (!trimmedGameName || !normalizedTagLine) {
         error = "Please enter both game name and tag line.";
+        tagLineError = normalizedTagLine
+          ? ""
+          : "Please enter a valid tag line.";
         return;
       }
+
+      tagLineError = "";
+      tagLine = normalizedTagLine;
 
       // Strip the # from tagLine for the API request
       const cleanTagLine = normalizedTagLine.substring(1);
@@ -126,7 +169,12 @@
         `/api/summoner?gameName=${encodeURIComponent(trimmedGameName)}&tagLine=${encodeURIComponent(cleanTagLine)}&platform=${encodeURIComponent(selectedRegion)}`,
       );
       if (!res.ok) throw new Error(await res.text());
-      const fetchedProfile: ProfileData | null = await res.json();
+      const fetchedProfile:
+        | (NonNullable<ProfileData> & {
+            nextOffset?: number;
+            hasMore?: boolean;
+          })
+        | null = await res.json();
       if (!fetchedProfile) {
         throw new Error("Profile response was empty.");
       }
@@ -148,13 +196,20 @@
       gameName = "";
       tagLine = "";
       // Reset pagination state
-      offset = 0;
-      hasMore = true;
+      nextOffset = fetchedProfile.nextOffset ?? 0;
+      hasMore = fetchedProfile.hasMore ?? false;
+      selectedChampion = null;
+      selectedOpponentChampion = null;
     } catch (err: any) {
       error = err.message;
     } finally {
       loading = false;
     }
+  }
+
+  function handleSearchSubmit(event: SubmitEvent) {
+    event.preventDefault();
+    void handleSearch();
   }
 
   async function loadProfile(
@@ -175,13 +230,16 @@
   }
 
   async function loadMore() {
-    if (!currentProfile || isLoadingMore || !hasMore) return;
+    if (!currentProfile || isLoadingMore || !hasMore) {
+      return;
+    }
 
     isLoadingMore = true;
     try {
-      const nextOffset = offset + 10;
       const res = await fetch(
-        `/api/summoner?gameName=${encodeURIComponent(currentSearchGameName)}&tagLine=${encodeURIComponent(currentSearchTagLine)}&platform=${encodeURIComponent(selectedRegion)}&offset=${nextOffset}`,
+        createSummonerApiUrl({
+          offset: nextOffset,
+        }),
       );
       if (!res.ok) throw new Error(await res.text());
 
@@ -193,11 +251,8 @@
         currentProfile.matches = [...currentProfile.matches, ...newMatches];
       }
 
-      // Update offset and check if there are more matches
-      offset = nextOffset;
-      if (newMatches.length < 10) {
-        hasMore = false;
-      }
+      nextOffset = response.nextOffset ?? nextOffset + 10;
+      hasMore = response.hasMore ?? newMatches.length >= 10;
     } catch (err: any) {
       console.error("Failed to load more matches:", err.message);
     } finally {
@@ -225,40 +280,94 @@
     return Math.round((wins / currentProfile.matches.length) * 100);
   });
 
-  const groupedMatchDays = $derived.by(() => {
-    const matches = currentProfile?.matches ?? [];
+  let selectedChampion = $state<string | null>(null);
+  let selectedOpponentChampion = $state<string | null>(null);
+  let isChampionFilterOpen = $state(false);
+  let isOpponentFilterOpen = $state(false);
+  let championFilterDropdownEl = $state<HTMLElement | null>(null);
+  let opponentFilterDropdownEl = $state<HTMLElement | null>(null);
+  let nextOffset = $state(0);
+
+  const championFilterOptions = $derived.by(() => {
+    const matches = (currentProfile?.matches ?? []) as Array<any>;
+    if (!matches.length) return [];
+
+    const counts = new Map<string, number>();
+    for (const match of matches) {
+      const champion = match?.champion;
+      if (!champion) continue;
+      counts.set(champion, (counts.get(champion) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([champion, count]) => ({ champion, count }));
+  });
+
+  function buildChampionFacet(
+    selector: (match: MatchSummaryResponse) => string | undefined,
+  ) {
+    const matches = (currentProfile?.matches ?? []) as MatchSummaryResponse[];
     if (!matches.length)
-      return [] as Array<{
-        dateKey: string;
-        dateLabel: string;
-        matches: typeof matches;
-        wins: number;
-        losses: number;
-      }>;
+      return [] as Array<{ champion: string; count: number }>;
+
+    const counts = new Map<string, number>();
+    for (const match of matches) {
+      const champion = selector(match);
+      if (!champion) continue;
+      counts.set(champion, (counts.get(champion) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([champion, count]) => ({ champion, count }));
+  }
+
+  const opponentChampionOptions = $derived.by(() =>
+    buildChampionFacet((match) => match.laneOpponent?.champion),
+  );
+
+  const hasActiveMatchFilters = $derived.by(() => {
+    return Boolean(selectedChampion || selectedOpponentChampion);
+  });
+
+  const filteredMatchDays = $derived.by(() => {
+    const sourceMatches = (currentProfile?.matches ??
+      []) as MatchSummaryResponse[];
+
+    if (!sourceMatches.length) return [];
+
+    const filteredMatches = sourceMatches.filter((match) => {
+      if (selectedChampion && match.champion !== selectedChampion) {
+        return false;
+      }
+      if (
+        selectedOpponentChampion &&
+        match.laneOpponent?.champion !== selectedOpponentChampion
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (!filteredMatches.length) return [];
 
     const byDay = new Map<
       string,
       {
         dateKey: string;
         timestamp: number;
-        matches: typeof matches;
+        matches: MatchSummaryResponse[];
         wins: number;
         losses: number;
       }
     >();
 
-    for (const match of matches as Array<any>) {
-      const rawPlayed =
-        match?.playedAt ??
-        match?.info?.gameEndTimestamp ??
-        match?.info?.gameStartTimestamp ??
-        match?.gameEndTimestamp ??
-        match?.gameStartTimestamp ??
-        null;
-
+    for (const match of filteredMatches) {
+      const rawPlayed = match?.playedAt ?? null;
       const playedAt =
         typeof rawPlayed === "number" && rawPlayed > 0 ? rawPlayed : null;
-
       const date = playedAt ? new Date(playedAt) : null;
       const dateKey = date
         ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
@@ -277,7 +386,6 @@
       }
 
       group.matches.push(match);
-
       if (match.result === "win") {
         group.wins += 1;
       } else if (match.result === "loss") {
@@ -297,6 +405,7 @@
             .toUpperCase();
           dateLabel = `${day} ${month}`;
         }
+
         return {
           dateKey: group.dateKey,
           dateLabel,
@@ -307,41 +416,6 @@
       });
   });
 
-  let selectedChampion = $state<string | null>(null);
-  let isChampionFilterOpen = $state(false);
-  let championFilterDropdownEl = $state<HTMLElement | null>(null);
-
-  const championFilterOptions = $derived.by(() => {
-    const matches = (currentProfile?.matches ?? []) as Array<any>;
-    if (!matches.length) return [];
-
-    const counts = new Map<string, number>();
-    for (const match of matches) {
-      const champion = match?.champion;
-      if (!champion) continue;
-      counts.set(champion, (counts.get(champion) ?? 0) + 1);
-    }
-
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([champion, count]) => ({ champion, count }));
-  });
-
-  const filteredMatchDays = $derived.by(() => {
-    const days = (groupedMatchDays as any[]) ?? [];
-    if (!days.length) return [];
-    if (!selectedChampion) return days;
-
-    return days
-      .map((day: any) => ({
-        ...day,
-        matches: (day.matches ?? []).filter(
-          (m: any) => m?.champion === selectedChampion,
-        ),
-      }))
-      .filter((day: any) => day.matches.length > 0);
-  });
-
   let reflectionModalOpen = $state(false);
   let selectedMatch = $state<import("$lib/types").MatchSummaryResponse | null>(
     null,
@@ -349,7 +423,19 @@
   let reflectionText = $state("");
   let reflectionError = $state("");
   let matchReflections = $state<Record<string, string>>({});
-  let offset = $state(0);
+  let learningObjectiveDropdownEl = $state<HTMLElement | null>(null);
+  let isLearningObjectiveOpen = $state(false);
+  let learningObjectives = $state<string[]>([]);
+  let learningObjectiveInput = $state("");
+  let isAddingObjective = $state(false);
+  let selectedObjective = $state<string>("");
+  let emotionalState = $state<string>("");
+  let objectiveExecution = $state("");
+  let wentWell = $state("");
+  let wentBad = $state("");
+  let emotionalReflection = $state("");
+  let reflectionSaved = $state(false);
+  let tiltAlertDismissed = $state(false);
   let isLoadingMore = $state(false);
   let hasMore = $state(true);
   let dismissed = $state(false);
@@ -419,6 +505,8 @@
         goldPerMin: 0,
         kpPercent: 0,
         deathPercent: 0,
+        csAt15: null as number | null,
+        csAt20: null as number | null,
       };
     }
 
@@ -451,11 +539,36 @@
           ) / 100
         : 0;
 
-    return { csPerMin, goldPerMin, kpPercent, deathPercent };
+    return {
+      csPerMin,
+      goldPerMin,
+      kpPercent,
+      deathPercent,
+      csAt15:
+        typeof selectedMatch.stats.csAt15 === "number"
+          ? selectedMatch.stats.csAt15
+          : null,
+      csAt20:
+        typeof selectedMatch.stats.csAt20 === "number"
+          ? selectedMatch.stats.csAt20
+          : null,
+    };
   });
 
   function reflectionKey(matchId: string) {
     return `${currentProfileKey}:${matchId}`;
+  }
+
+  function reflectionFieldKey(matchId: string, field: string): string {
+    return `${currentProfileKey}:${matchId}:${field}`;
+  }
+
+  function resolveObjectiveSelection(preferred?: string | null): string {
+    if (preferred && learningObjectives.includes(preferred)) {
+      return preferred;
+    }
+
+    return learningObjectives.at(-1) ?? "";
   }
 
   function openReflection(match: import("$lib/types").MatchSummaryResponse) {
@@ -465,6 +578,35 @@
     reflectionText = matchReflections[key] || "";
     reflectionError = "";
     reflectionModalOpen = true;
+    tiltAlertDismissed = false;
+
+    // Load reflection fields from localStorage
+    if (typeof window !== "undefined") {
+      emotionalState =
+        localStorage.getItem(reflectionFieldKey(match.matchId, "emotion")) ||
+        "";
+      objectiveExecution =
+        localStorage.getItem(
+          reflectionFieldKey(match.matchId, "objectiveExecution"),
+        ) || "";
+      wentWell =
+        localStorage.getItem(reflectionFieldKey(match.matchId, "wentWell")) ||
+        "";
+      wentBad =
+        localStorage.getItem(reflectionFieldKey(match.matchId, "wentBad")) ||
+        "";
+      emotionalReflection =
+        localStorage.getItem(
+          reflectionFieldKey(match.matchId, "emotionalReflection"),
+        ) || "";
+      const storedObjective = localStorage.getItem("currentLearningObjective");
+      selectedObjective = resolveObjectiveSelection(storedObjective);
+      if (selectedObjective) {
+        localStorage.setItem("currentLearningObjective", selectedObjective);
+      } else {
+        localStorage.removeItem("currentLearningObjective");
+      }
+    }
   }
 
   function closeReflection() {
@@ -472,6 +614,106 @@
     selectedMatch = null;
     reflectionText = "";
     reflectionError = "";
+    emotionalState = "";
+    objectiveExecution = "";
+    wentWell = "";
+    wentBad = "";
+    emotionalReflection = "";
+    reflectionSaved = false;
+    isLearningObjectiveOpen = false;
+    isAddingObjective = false;
+  }
+
+  function addLearningObjective() {
+    const trimmed = learningObjectiveInput.trim();
+    if (!trimmed) return;
+
+    const existing = learningObjectives.find(
+      (objective) => objective.toLowerCase() === trimmed.toLowerCase(),
+    );
+
+    const nextObjectives = existing
+      ? learningObjectives
+      : [...learningObjectives, trimmed];
+
+    learningObjectives = nextObjectives;
+
+    const nextSelectedObjective = existing ?? trimmed;
+
+    localStorage.setItem("learningObjectives", JSON.stringify(nextObjectives));
+    selectedObjective = nextSelectedObjective;
+    localStorage.setItem("currentLearningObjective", nextSelectedObjective);
+    learningObjectiveInput = "";
+    isAddingObjective = false;
+    isLearningObjectiveOpen = false;
+  }
+
+  function deleteLearningObjective(index: number) {
+    const removedObjective = learningObjectives[index];
+    const nextObjectives = learningObjectives.filter((_, i) => i !== index);
+    learningObjectives = nextObjectives;
+    localStorage.setItem("learningObjectives", JSON.stringify(nextObjectives));
+    if (selectedObjective === removedObjective) {
+      selectedObjective = nextObjectives.at(-1) ?? "";
+      if (selectedObjective) {
+        localStorage.setItem("currentLearningObjective", selectedObjective);
+      } else {
+        localStorage.removeItem("currentLearningObjective");
+      }
+    }
+  }
+
+  function updateObjective(value: string) {
+    if (value === "__add__") {
+      selectedObjective = resolveObjectiveSelection(selectedObjective);
+      isAddingObjective = true;
+      learningObjectiveInput = "";
+      return;
+    }
+
+    isAddingObjective = false;
+    selectedObjective = value;
+    if (value) {
+      localStorage.setItem("currentLearningObjective", value);
+    } else {
+      localStorage.removeItem("currentLearningObjective");
+    }
+  }
+
+  function toggleLearningObjectiveDropdown() {
+    isLearningObjectiveOpen = !isLearningObjectiveOpen;
+    if (!isLearningObjectiveOpen) {
+      isAddingObjective = false;
+      learningObjectiveInput = "";
+    }
+  }
+
+  function handleLearningObjectiveInputKeydown(event: KeyboardEvent) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addLearningObjective();
+  }
+
+  function updateEmotionalState(value: string) {
+    emotionalState = value;
+    if (selectedMatch) {
+      localStorage.setItem(
+        reflectionFieldKey(selectedMatch.matchId, "emotion"),
+        value,
+      );
+    }
+  }
+
+  function autoSaveReflectionField(field: string, value: string) {
+    if (!selectedMatch) return;
+    localStorage.setItem(
+      reflectionFieldKey(selectedMatch.matchId, field),
+      value,
+    );
+    reflectionSaved = true;
+    setTimeout(() => {
+      reflectionSaved = false;
+    }, 1500);
   }
 
   function saveReflection() {
@@ -497,7 +739,7 @@
     return matchReflections[reflectionKey(match.matchId)] || "";
   }
 
-  $effect(() => {
+  onMount(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("lol-reflections");
       if (stored) {
@@ -505,6 +747,18 @@
           matchReflections = JSON.parse(stored);
         } catch (err) {
           console.error("Failed to parse stored reflections:", err);
+        }
+      }
+      const objectives = localStorage.getItem("learningObjectives");
+      if (objectives) {
+        try {
+          learningObjectives = JSON.parse(objectives);
+          const storedObjective = localStorage.getItem(
+            "currentLearningObjective",
+          );
+          selectedObjective = resolveObjectiveSelection(storedObjective);
+        } catch (err) {
+          console.error("Failed to parse learning objectives:", err);
         }
       }
     }
@@ -526,17 +780,36 @@
     isChampionFilterOpen = false;
   }
 
-  function handleChampionFilterOutsideClick(event: MouseEvent) {
-    if (!isChampionFilterOpen) return;
+  function toggleOpponentFilter() {
+    isOpponentFilterOpen = !isOpponentFilterOpen;
+  }
 
+  function selectOpponentChampion(champion: string | null) {
+    selectedOpponentChampion = champion;
+    isOpponentFilterOpen = false;
+  }
+
+  function handleChampionFilterOutsideClick(event: MouseEvent) {
     const target = event.target as Node | null;
-    if (championFilterDropdownEl && target) {
-      if (championFilterDropdownEl.contains(target)) {
-        return;
+
+    if (isChampionFilterOpen && championFilterDropdownEl && target) {
+      if (!championFilterDropdownEl.contains(target)) {
+        isChampionFilterOpen = false;
       }
     }
 
-    isChampionFilterOpen = false;
+    if (isOpponentFilterOpen && opponentFilterDropdownEl && target) {
+      if (!opponentFilterDropdownEl.contains(target)) {
+        isOpponentFilterOpen = false;
+      }
+    }
+
+    if (isLearningObjectiveOpen && learningObjectiveDropdownEl && target) {
+      if (!learningObjectiveDropdownEl.contains(target)) {
+        isLearningObjectiveOpen = false;
+        isAddingObjective = false;
+      }
+    }
   }
 </script>
 
@@ -550,7 +823,7 @@
       {#each profileStore.list as profile, i (profile.gameName + profile.tagLine)}
         <li class="flex items-center gap-2">
           <button
-            class="flex-1 text-left p-2 rounded hover:bg-gray-700 transition {i ===
+            class="flex-1 text-left p-2 rounded cursor-pointer hover:bg-gray-700 transition {i ===
             profileStore.activeIndex
               ? 'bg-gray-700'
               : ''}"
@@ -563,7 +836,7 @@
           </button>
           <button
             type="button"
-            class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 rounded"
+            class="px-2 py-1 text-base bg-red-600 hover:bg-red-700 rounded cursor-pointer"
             aria-label={`Delete saved profile ${profile.gameName}${profile.tagLine}`}
             onclick={(event) => {
               event.stopPropagation();
@@ -583,7 +856,7 @@
     <div class="mb-6">
       <!-- Region Select -->
       <div class="mb-4">
-        <label for="platform" class="block text-sm font-medium mb-1"
+        <label for="platform" class="block text-base font-medium mb-1"
           >Region</label
         >
         <select
@@ -598,9 +871,9 @@
       </div>
 
       <!-- Game Name and Tag Line (connected) -->
-      <div class="flex gap-2 items-end">
+      <form class="flex gap-2 items-end" onsubmit={handleSearchSubmit}>
         <div class="flex-1">
-          <label for="gameName" class="block text-sm font-medium mb-1"
+          <label for="gameName" class="block text-base font-medium mb-1"
             >Game Name</label
           >
           <input
@@ -611,7 +884,7 @@
           />
         </div>
         <div class="w-40">
-          <label for="tagLine" class="block text-sm font-medium mb-1"
+          <label for="tagLine" class="block text-base font-medium mb-1"
             >Tag Line</label
           >
           <input
@@ -624,17 +897,17 @@
           />
         </div>
         <button
-          onclick={handleSearch}
+          type="submit"
           disabled={loading}
           class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-2"
         >
           <Search size={16} />
           {loading ? "Searching..." : "Search"}
         </button>
-      </div>
+      </form>
 
       {#if tagLineError}
-        <p class="text-red-400 text-sm mt-2">{tagLineError}</p>
+        <p class="text-red-400 text-base mt-2">{tagLineError}</p>
       {/if}
     </div>
 
@@ -648,7 +921,7 @@
         <div class="flex items-center gap-4">
           {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
             <img
-              src={`https://ddragon.leagueoflegends.com/cdn/14.24.1/img/profileicon/${currentProfile.summoner.profileIconId}.png`}
+              src={profileIcon(currentProfile.summoner.profileIconId)}
               alt={`${currentProfile.summoner.name} profile icon`}
               class="h-14 w-14 rounded-full border border-gray-600 object-cover"
               loading="lazy"
@@ -668,7 +941,7 @@
       {#if tiltState.isTilting && !dismissed}
         <div class="mb-4 match-tilt-banner p-3 rounded">
           <div class="flex items-center justify-between gap-3">
-            <p class="text-sm match-tilt-banner-text">
+            <p class="text-base match-tilt-banner-text">
               {tiltState.streakLength}-game losing streak. Consider taking a
               break.
             </p>
@@ -690,67 +963,138 @@
       <div class="match-filter-bar">
         <div>
           <p class="match-filter-label">Match history</p>
-          <p class="match-filter-help">Filter games by champion</p>
+          <p class="match-filter-help">
+            Filter games by champion and matchup (current season Solo/Duo only)
+          </p>
         </div>
-        <div class="match-filter-dropdown" bind:this={championFilterDropdownEl}>
-          <button
-            type="button"
-            class="match-filter-trigger"
-            onclick={toggleChampionFilter}
+        <div class="flex flex-wrap gap-3">
+          <div
+            class="match-filter-dropdown"
+            bind:this={championFilterDropdownEl}
           >
-            <div class="match-filter-trigger-main">
-              {#if selectedChampion}
-                <img
-                  src={championIcon(selectedChampion.replaceAll(" ", ""))}
-                  alt={selectedChampion}
-                  width="24"
-                  height="24"
-                  loading="lazy"
-                />
-                <span>{selectedChampion}</span>
-              {:else}
-                <span>All champions</span>
-              {/if}
-            </div>
-            <ChevronDown class="match-filter-trigger-chevron" />
-          </button>
-
-          {#if isChampionFilterOpen}
-            <div class="match-filter-menu">
-              <button
-                type="button"
-                class={`match-filter-option ${selectedChampion ? "" : "match-filter-option--active"}`}
-                onclick={() => selectChampion(null)}
-              >
-                <div class="match-filter-option-main">
-                  <span class="match-filter-option-pill">All</span>
+            <button
+              type="button"
+              class="match-filter-trigger"
+              onclick={toggleChampionFilter}
+            >
+              <div class="match-filter-trigger-main">
+                {#if selectedChampion}
+                  <img
+                    src={championIcon(selectedChampion.replaceAll(" ", ""))}
+                    alt={selectedChampion}
+                    width="24"
+                    height="24"
+                    loading="lazy"
+                  />
+                  <span>{selectedChampion}</span>
+                {:else}
                   <span>All champions</span>
-                </div>
-              </button>
+                {/if}
+              </div>
+              <ChevronDown class="match-filter-trigger-chevron" />
+            </button>
 
-              {#each championFilterOptions as option (option.champion)}
+            {#if isChampionFilterOpen}
+              <div class="match-filter-menu">
                 <button
                   type="button"
-                  class={`match-filter-option ${selectedChampion === option.champion ? "match-filter-option--active" : ""}`}
-                  onclick={() => selectChampion(option.champion)}
+                  class={`match-filter-option ${selectedChampion ? "" : "match-filter-option--active"}`}
+                  onclick={() => selectChampion(null)}
                 >
                   <div class="match-filter-option-main">
-                    <img
-                      src={championIcon(option.champion.replaceAll(" ", ""))}
-                      alt={option.champion}
-                      width="24"
-                      height="24"
-                      loading="lazy"
-                    />
-                    <span>{option.champion}</span>
+                    <span class="match-filter-option-pill">All</span>
+                    <span>All champions</span>
                   </div>
-                  <span class="match-filter-option-count">
-                    {option.count}
-                  </span>
                 </button>
-              {/each}
-            </div>
-          {/if}
+
+                {#each championFilterOptions as option (option.champion)}
+                  <button
+                    type="button"
+                    class={`match-filter-option ${selectedChampion === option.champion ? "match-filter-option--active" : ""}`}
+                    onclick={() => selectChampion(option.champion)}
+                  >
+                    <div class="match-filter-option-main">
+                      <img
+                        src={championIcon(option.champion.replaceAll(" ", ""))}
+                        alt={option.champion}
+                        width="24"
+                        height="24"
+                        loading="lazy"
+                      />
+                      <span>{option.champion}</span>
+                    </div>
+                    <span class="match-filter-option-count">{option.count}</span
+                    >
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div
+            class="match-filter-dropdown"
+            bind:this={opponentFilterDropdownEl}
+          >
+            <button
+              type="button"
+              class="match-filter-trigger"
+              onclick={toggleOpponentFilter}
+            >
+              <div class="match-filter-trigger-main">
+                {#if selectedOpponentChampion}
+                  <img
+                    src={championIcon(
+                      selectedOpponentChampion.replaceAll(" ", ""),
+                    )}
+                    alt={selectedOpponentChampion}
+                    width="24"
+                    height="24"
+                    loading="lazy"
+                  />
+                  <span>{selectedOpponentChampion}</span>
+                {:else}
+                  <span>Any lane opponent</span>
+                {/if}
+              </div>
+              <ChevronDown class="match-filter-trigger-chevron" />
+            </button>
+
+            {#if isOpponentFilterOpen}
+              <div class="match-filter-menu">
+                <button
+                  type="button"
+                  class={`match-filter-option ${selectedOpponentChampion ? "" : "match-filter-option--active"}`}
+                  onclick={() => selectOpponentChampion(null)}
+                >
+                  <div class="match-filter-option-main">
+                    <span class="match-filter-option-pill">Any</span>
+                    <span>Any lane opponent</span>
+                  </div>
+                </button>
+
+                {#each opponentChampionOptions as option (option.champion)}
+                  <button
+                    type="button"
+                    class={`match-filter-option ${selectedOpponentChampion === option.champion ? "match-filter-option--active" : ""}`}
+                    onclick={() => selectOpponentChampion(option.champion)}
+                  >
+                    <div class="match-filter-option-main">
+                      <img
+                        src={championIcon(option.champion.replaceAll(" ", ""))}
+                        alt={option.champion}
+                        width="24"
+                        height="24"
+                        loading="lazy"
+                      />
+                      <span>{option.champion}</span>
+                    </div>
+                    <span class="match-filter-option-count">{option.count}</span
+                    >
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
 
@@ -796,6 +1140,11 @@
           >
             {isLoadingMore ? "Loading..." : "Load more"}
           </button>
+          {#if hasActiveMatchFilters}
+            <p class="text-gray-300 text-center match-load-more ml-4">
+              Filters apply to loaded matches. Load more to refine results.
+            </p>
+          {/if}
         {:else}
           <p class="text-gray-400 text-center match-load-more">
             All matches loaded
@@ -808,32 +1157,74 @@
           class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
         >
           <div
-            class="w-[min(95vw,700px)] bg-gray-900 border border-gray-700 rounded p-5 shadow-lg max-h-[90vh] overflow-y-auto"
+            class="w-[min(95vw,750px)] bg-gray-900 border border-gray-700 rounded p-6 shadow-lg max-h-[90vh] overflow-y-auto text-base leading-relaxed"
           >
-            <div class="flex justify-between items-center mb-3">
-              <h2 class="text-xl font-bold">
-                Journal reflection - {selectedMatch.champion}
-              </h2>
+            <!-- Header with result color coding -->
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <h2 class="text-xl font-bold mb-1">
+                  Journal reflection - {selectedMatch.champion}
+                </h2>
+                <p class="text-base text-gray-400">
+                  Match: {selectedMatch.kda.kills}/{selectedMatch.kda
+                    .deaths}/{selectedMatch.kda.assists} •
+                  <span
+                    class="font-bold {selectedMatch.result === 'win'
+                      ? 'text-purple-400'
+                      : 'text-pink-400'}"
+                  >
+                    {selectedMatch.result.toUpperCase()}
+                  </span>
+                </p>
+              </div>
+              <button
+                onclick={closeReflection}
+                class="text-gray-400 hover:text-gray-200 text-xl font-bold"
+              >
+                ×
+              </button>
             </div>
 
-            <p class="text-sm text-gray-300 mb-3">
-              Match: {selectedMatch.kda.kills}/{selectedMatch.kda
-                .deaths}/{selectedMatch.kda.assists} • {selectedMatch.result.toUpperCase()}
-            </p>
+            <!-- Tilt Break Alert -->
+            {#if tiltState.isTilting && emotionalState === "😤 Tilted" && !tiltAlertDismissed}
+              <div
+                class="mb-4 p-3 rounded-lg border border-pink-600 bg-black/30"
+                style="background-color: rgba(190,24,93,0.12); border: 1px solid #be185d;"
+              >
+                <div class="flex justify-between items-start">
+                  <div class="flex gap-2">
+                    <span class="text-pink-400 text-lg">⚠</span>
+                    <p class="text-pink-400 text-base leading-relaxed">
+                      You've lost 3 in a row and you're feeling tilted.
+                      Seriously consider closing the client and taking a break.
+                      Come back when you're reset.
+                    </p>
+                  </div>
+                  <button
+                    onclick={() => (tiltAlertDismissed = true)}
+                    class="text-pink-400 hover:text-pink-300 font-bold ml-2 shrink-0"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            {/if}
 
             <!-- Stats Dashboard Grid -->
             <div class="mb-4 p-4 bg-gray-800 rounded border border-gray-700">
-              <h3 class="text-sm font-semibold mb-3">Performance Stats</h3>
-              <div class="grid grid-cols-2 gap-3 mb-3">
+              <h3 class="text-base font-semibold mb-3">Performance Stats</h3>
+              <div class="grid grid-cols-2 gap-3">
                 <!-- CS/Min -->
                 <div class="bg-gray-700 p-3 rounded">
-                  <p class="text-xs text-gray-400 mb-1">CS/Min</p>
+                  <p class="text-base text-gray-400 mb-1">CS/Min</p>
                   <p
                     class="text-2xl font-bold {matchStats.csPerMin > 8
                       ? 'text-green-400'
-                      : matchStats.csPerMin < 5
-                        ? 'text-red-400'
-                        : 'text-gray-300'}"
+                      : matchStats.csPerMin > 6
+                        ? 'text-lime-400'
+                        : matchStats.csPerMin > 4
+                          ? 'text-yellow-400'
+                          : 'text-red-400'}"
                   >
                     {matchStats.csPerMin.toFixed(2)}
                   </p>
@@ -841,19 +1232,31 @@
 
                 <!-- Gold/Min -->
                 <div class="bg-gray-700 p-3 rounded">
-                  <p class="text-xs text-gray-400 mb-1">Gold/Min</p>
-                  <p class="text-2xl font-bold text-yellow-400">
+                  <p class="text-base text-gray-400 mb-1">Gold/Min</p>
+                  <p
+                    class="text-2xl font-bold {matchStats.goldPerMin > 550
+                      ? 'text-green-400'
+                      : matchStats.goldPerMin > 450
+                        ? 'text-lime-400'
+                        : matchStats.goldPerMin > 350
+                          ? 'text-yellow-400'
+                          : 'text-red-400'}"
+                  >
                     {matchStats.goldPerMin.toFixed(2)}
                   </p>
                 </div>
 
                 <!-- Kill Participation -->
                 <div class="bg-gray-700 p-3 rounded">
-                  <p class="text-xs text-gray-400 mb-1">Kill Participation</p>
+                  <p class="text-base text-gray-400 mb-1">Kill Participation</p>
                   <p
-                    class="text-2xl font-bold {matchStats.kpPercent > 50
-                      ? 'text-blue-400'
-                      : 'text-gray-300'}"
+                    class="text-2xl font-bold {matchStats.kpPercent > 60
+                      ? 'text-green-400'
+                      : matchStats.kpPercent > 45
+                        ? 'text-lime-400'
+                        : matchStats.kpPercent > 30
+                          ? 'text-yellow-400'
+                          : 'text-red-400'}"
                   >
                     {matchStats.kpPercent.toFixed(1)}%
                   </p>
@@ -861,34 +1264,299 @@
 
                 <!-- Death Contribution -->
                 <div class="bg-gray-700 p-3 rounded">
-                  <p class="text-xs text-gray-400 mb-1">Death Contribution</p>
+                  <p class="text-base text-gray-400 mb-1">Death Contribution</p>
                   <p
-                    class="text-2xl font-bold {matchStats.deathPercent > 50
-                      ? 'text-red-500'
-                      : 'text-gray-300'}"
+                    class="text-2xl font-bold {matchStats.deathPercent < 20
+                      ? 'text-green-400'
+                      : matchStats.deathPercent < 35
+                        ? 'text-lime-400'
+                        : matchStats.deathPercent < 50
+                          ? 'text-yellow-400'
+                          : 'text-red-500'}"
                   >
                     {matchStats.deathPercent.toFixed(1)}%
+                  </p>
+                </div>
+
+                <!-- CS at 15 -->
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="text-base text-gray-400 mb-1">CS at 15</p>
+                  <p
+                    class="text-2xl font-bold {matchStats.csAt15 === null
+                      ? 'text-gray-500'
+                      : matchStats.csAt15 >= 120
+                        ? 'text-green-400'
+                        : matchStats.csAt15 >= 95
+                          ? 'text-lime-400'
+                          : matchStats.csAt15 >= 75
+                            ? 'text-yellow-400'
+                            : 'text-red-400'}"
+                  >
+                    {matchStats.csAt15 === null
+                      ? "-"
+                      : matchStats.csAt15.toFixed(0)}
+                  </p>
+                </div>
+
+                <!-- CS at 20 -->
+                <div class="bg-gray-700 p-3 rounded">
+                  <p class="text-base text-gray-400 mb-1">CS at 20</p>
+                  <p
+                    class="text-2xl font-bold {matchStats.csAt20 === null
+                      ? 'text-gray-500'
+                      : matchStats.csAt20 >= 165
+                        ? 'text-green-400'
+                        : matchStats.csAt20 >= 135
+                          ? 'text-lime-400'
+                          : matchStats.csAt20 >= 105
+                            ? 'text-yellow-400'
+                            : 'text-red-400'}"
+                  >
+                    {matchStats.csAt20 === null
+                      ? "-"
+                      : matchStats.csAt20.toFixed(0)}
                   </p>
                 </div>
               </div>
             </div>
 
-            <textarea
-              bind:value={reflectionText}
-              class="w-full h-32 p-2 mb-3 bg-gray-800 border border-gray-600 rounded resize-none"
-              placeholder="Write your reflections about this match..."
-            ></textarea>
-            {#if reflectionError}
-              <p class="text-red-400 mb-2">{reflectionError}</p>
+            <!-- Learning Objective Dropdown (Persistent) -->
+            <div class="mb-4">
+              <label
+                for="learning-objective"
+                class="block text-base font-semibold text-gray-300 mb-2"
+                >Current Learning Objective</label
+              >
+              <div class="relative" bind:this={learningObjectiveDropdownEl}>
+                <button
+                  id="learning-objective"
+                  type="button"
+                  class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-gray-300 text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none flex items-center justify-between"
+                  style="background-color: #131620; border: 1px solid #252b3d; color: #e5e7eb;"
+                  onclick={toggleLearningObjectiveDropdown}
+                >
+                  <span class={selectedObjective ? "" : "text-gray-400"}
+                    >{selectedObjective || "Select an objective..."}</span
+                  >
+                  <ChevronDown
+                    size={18}
+                    class={`transition-transform ${
+                      isLearningObjectiveOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {#if isLearningObjectiveOpen}
+                  <div
+                    class="absolute left-0 right-0 mt-1 z-20 rounded border border-gray-700 bg-gray-900 shadow-lg"
+                    style="background-color: #131620; border: 1px solid #252b3d;"
+                  >
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 text-base text-gray-300 hover:bg-gray-800 cursor-pointer"
+                      onclick={() => {
+                        updateObjective("");
+                        isLearningObjectiveOpen = false;
+                      }}
+                    >
+                      Select an objective...
+                    </button>
+
+                    {#each learningObjectives as objective, index (objective + "-" + index)}
+                      <div class="flex items-center border-t border-gray-800">
+                        <button
+                          type="button"
+                          class="flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer {selectedObjective ===
+                          objective
+                            ? 'text-purple-300'
+                            : 'text-gray-300'}"
+                          onclick={() => {
+                            updateObjective(objective);
+                            isLearningObjectiveOpen = false;
+                          }}
+                        >
+                          {objective}
+                        </button>
+                        <button
+                          type="button"
+                          class="px-3 py-2 text-gray-400 hover:text-red-400 text-xl leading-none cursor-pointer"
+                          aria-label={`Delete objective ${objective}`}
+                          onclick={(event) => {
+                            event.stopPropagation();
+                            deleteLearningObjective(index);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    {/each}
+
+                    <div class="border-t border-gray-800">
+                      {#if isAddingObjective}
+                        <div class="p-2 flex gap-2">
+                          <input
+                            type="text"
+                            bind:value={learningObjectiveInput}
+                            onkeydown={handleLearningObjectiveInputKeydown}
+                            placeholder="Enter new objective..."
+                            class="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-base text-gray-300"
+                            style="background-color: #0c0e14; border: 1px solid #252b3d;"
+                          />
+                          <button
+                            type="button"
+                            onclick={addLearningObjective}
+                            class="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-base font-semibold text-white cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onclick={() => {
+                              isAddingObjective = false;
+                              learningObjectiveInput = "";
+                            }}
+                            class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-base text-gray-200 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      {:else}
+                        <button
+                          type="button"
+                          class="w-full text-left px-3 py-2 text-base text-purple-300 hover:bg-gray-800 cursor-pointer"
+                          onclick={(event) => {
+                            event.stopPropagation();
+                            updateObjective("__add__");
+                          }}
+                        >
+                          Add new learning objective
+                        </button>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Emotional State Dropdown (Per Match) -->
+            <div class="mb-4">
+              <label
+                for="emotional-state"
+                class="block text-base font-semibold text-gray-300 mb-2"
+                >How did you feel this game?</label
+              >
+              <select
+                id="emotional-state"
+                bind:value={emotionalState}
+                onchange={(e) =>
+                  updateEmotionalState((e.target as HTMLSelectElement).value)}
+                class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-gray-300 text-base appearance-none cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none"
+                style="background-color: #131620; border: 1px solid #252b3d; color: #e5e7eb;"
+              >
+                <option value="">Select emotional state...</option>
+                <option value="😤 Tilted">😤 Tilted</option>
+                <option value="😐 Neutral">😐 Neutral</option>
+                <option value="🙂 Good">🙂 Good</option>
+                <option value="😤 Frustrated">😤 Frustrated</option>
+                <option value="😎 Confident">😎 Confident</option>
+                <option value="😴 Tired">😴 Tired</option>
+              </select>
+            </div>
+
+            <!-- Reflection Questions -->
+            <div class="space-y-3 mb-4">
+              <!-- Objective Execution -->
+              <div>
+                <label
+                  for="objective-execution"
+                  class="block text-base font-semibold text-gray-300 mb-2"
+                  >Did you execute on your learning objective?</label
+                >
+                <textarea
+                  id="objective-execution"
+                  bind:value={objectiveExecution}
+                  onblur={() =>
+                    autoSaveReflectionField(
+                      "objectiveExecution",
+                      objectiveExecution,
+                    )}
+                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
+                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  placeholder="Your thoughts..."
+                ></textarea>
+              </div>
+
+              <!-- What went well -->
+              <div>
+                <label
+                  for="went-well"
+                  class="block text-base font-semibold text-gray-300 mb-2"
+                  >What did you do well?</label
+                >
+                <textarea
+                  id="went-well"
+                  bind:value={wentWell}
+                  onblur={() => autoSaveReflectionField("wentWell", wentWell)}
+                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
+                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  placeholder="Your thoughts..."
+                ></textarea>
+              </div>
+
+              <!-- What could be better -->
+              <div>
+                <label
+                  for="went-bad"
+                  class="block text-base font-semibold text-gray-300 mb-2"
+                  >What could you have done better?</label
+                >
+                <textarea
+                  id="went-bad"
+                  bind:value={wentBad}
+                  onblur={() => autoSaveReflectionField("wentBad", wentBad)}
+                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
+                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  placeholder="Your thoughts..."
+                ></textarea>
+              </div>
+
+              <!-- Emotional Reflection -->
+              <div>
+                <label
+                  for="emotional-reflection"
+                  class="block text-base font-semibold text-gray-300 mb-2"
+                  >Emotional reflection — based on how you felt, why do you
+                  think you played that way?</label
+                >
+                <textarea
+                  id="emotional-reflection"
+                  bind:value={emotionalReflection}
+                  onblur={() =>
+                    autoSaveReflectionField(
+                      "emotionalReflection",
+                      emotionalReflection,
+                    )}
+                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
+                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  placeholder="Your thoughts..."
+                ></textarea>
+              </div>
+            </div>
+
+            <!-- Auto-save indicator -->
+            {#if reflectionSaved}
+              <p
+                class="text-base text-purple-400 text-center mb-3 animate-pulse"
+              >
+                Saved ✓
+              </p>
             {/if}
+
+            <!-- Modal Footer -->
             <div class="flex justify-end gap-2">
               <button
-                class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded"
-                onclick={closeReflection}>Cancel</button
-              >
-              <button
-                class="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded"
-                onclick={saveReflection}>Save</button
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-base font-semibold"
+                onclick={closeReflection}>Close</button
               >
             </div>
           </div>

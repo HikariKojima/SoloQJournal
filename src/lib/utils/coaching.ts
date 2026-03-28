@@ -125,7 +125,7 @@ export function buildHistoryStats(
     }
 
     championCounts[match.champion] = (championCounts[match.champion] || 0) + 1;
-    const role = (match as any).role || "UNKNOWN";
+    const role = match.playerPosition || match.playerRole || "UNKNOWN";
     roleCounts[role] = (roleCounts[role] || 0) + 1;
   }
 
@@ -206,7 +206,7 @@ export function buildCoachingPayload(
   const payload: CoachingPayload = {
     game: {
       champion: match.champion,
-      role: (match as any).role || history.primaryRole || "UNKNOWN",
+      role: match.playerPosition || match.playerRole || history.primaryRole || "UNKNOWN",
       win: match.result === "win",
       kills: match.kda.kills,
       deaths: match.kda.deaths,

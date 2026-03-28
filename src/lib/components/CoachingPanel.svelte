@@ -1,6 +1,6 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { Sparkles } from "lucide-svelte";
-  import { marked } from "marked";
   import { buildCoachingPayload } from "$lib/utils/coaching";
   import type { MatchSummaryResponse } from "$lib/types";
   import type { LeagueEntry, MatchHistoryStats } from "$lib/utils/coaching";
@@ -22,15 +22,58 @@
     () => `lol-coaching:${playerPuuid}:${match.matchId}`,
   );
 
-  $effect(() => {
-    if (typeof window === "undefined") return;
+  onMount(() => {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       coachingText = saved;
       cache[match.matchId] = saved;
       hasReviewed = true;
+      return;
     }
+
+    void reviewGame();
   });
+
+  const coachingLines = $derived.by(() => {
+    if (!coachingText) return [];
+    return coachingText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  });
+
+  type BoldSegment = {
+    text: string;
+    bold: boolean;
+  };
+
+  function splitBoldSegments(text: string): BoldSegment[] {
+    const segments: BoldSegment[] = [];
+    const regex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      const plainText = text.slice(lastIndex, match.index);
+      if (plainText) {
+        segments.push({ text: plainText, bold: false });
+      }
+
+      segments.push({ text: match[1], bold: true });
+      lastIndex = match.index + match[0].length;
+    }
+
+    const trailingText = text.slice(lastIndex);
+    if (trailingText) {
+      segments.push({ text: trailingText, bold: false });
+    }
+
+    if (segments.length === 0) {
+      segments.push({ text, bold: false });
+    }
+
+    return segments;
+  }
 
   async function reviewGame() {
     if (hasReviewed && coachingText) return;
@@ -91,40 +134,165 @@
   }
 </script>
 
-<div class="my-4 rounded-xl border border-amber-500 bg-zinc-900 p-4 text-white">
-  {#if !hasReviewed}
-    <button
-      class="flex items-center gap-2 rounded-lg bg-zinc-950 px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-zinc-800"
-      onclick={reviewGame}
-      disabled={isLoading}
-    >
-      <Sparkles class="h-5 w-5 text-amber-300" />
-      Review this game
-    </button>
-  {/if}
-
+<div class="coaching-panel-shell">
   {#if isLoading}
-    <div class="mt-3 animate-pulse text-amber-300">Analyzing...</div>
+    <div class="coaching-loading-row" aria-live="polite">
+      <Sparkles size={15} />
+      <span>Running AI coaching analysis...</span>
+    </div>
   {/if}
 
   {#if error}
-    <div class="mt-3 rounded-md bg-red-900 p-2 text-sm text-red-100">
+    <div class="coaching-error-box" role="alert">
       {error}
     </div>
   {/if}
 
   {#if coachingText}
-    <div class="prose prose-invert mt-3 max-w-none text-white coaching-prose">
-      {@html marked(coachingText)}
+    <div class="coaching-output coaching-prose" aria-live="polite">
+      {#each coachingLines as line, index (index)}
+        {#if line.startsWith("## ")}
+          <h2>
+            {#each splitBoldSegments(line.slice(3).trim()) as segment, segmentIndex (segmentIndex)}
+              {#if segment.bold}
+                <strong>{segment.text}</strong>
+              {:else}
+                {segment.text}
+              {/if}
+            {/each}
+          </h2>
+        {:else if line.startsWith("### ")}
+          <h3>
+            {#each splitBoldSegments(line.slice(4).trim()) as segment, segmentIndex (segmentIndex)}
+              {#if segment.bold}
+                <strong>{segment.text}</strong>
+              {:else}
+                {segment.text}
+              {/if}
+            {/each}
+          </h3>
+        {:else if line.startsWith("- ")}
+          <p class="coaching-bullet">
+            {#each splitBoldSegments(line.slice(2).trim()) as segment, segmentIndex (segmentIndex)}
+              {#if segment.bold}
+                <strong>{segment.text}</strong>
+              {:else}
+                {segment.text}
+              {/if}
+            {/each}
+          </p>
+        {:else}
+          <p>
+            {#each splitBoldSegments(line) as segment, segmentIndex (segmentIndex)}
+              {#if segment.bold}
+                <strong>{segment.text}</strong>
+              {:else}
+                {segment.text}
+              {/if}
+            {/each}
+          </p>
+        {/if}
+      {/each}
     </div>
   {/if}
 </div>
 
 <style>
-  :global(.coaching-prose h2) {
-    color: #f59e0b;
+  .coaching-panel-shell {
+    margin-top: 0.2rem;
+    border-radius: 14px;
+    border: 1px solid rgba(167, 139, 250, 0.4);
+    background:
+      radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 46%),
+      radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 42%),
+      #050b1b;
+    padding: 0.95rem 1rem;
+    box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62);
   }
+
+  .coaching-loading-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(167, 139, 250, 0.5);
+    background-color: rgba(15, 23, 42, 0.88);
+    padding: 0.36rem 0.72rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ddd6fe;
+    animation: coaching-pulse 1.2s ease-in-out infinite;
+  }
+
+  .coaching-error-box {
+    margin-top: 0.65rem;
+    border-radius: 10px;
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    background-color: rgba(127, 29, 29, 0.34);
+    padding: 0.55rem 0.7rem;
+    font-size: 0.82rem;
+    color: #fecaca;
+  }
+
+  .coaching-output {
+    margin-top: 0.68rem;
+    border-radius: 12px;
+    border: 1px solid rgba(99, 102, 241, 0.34);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.94));
+    padding: 0.78rem 0.9rem;
+    color: #e2e8f0;
+  }
+
+  @keyframes coaching-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 rgba(139, 92, 246, 0);
+      transform: translateY(0);
+    }
+    50% {
+      box-shadow: 0 0 0.8rem rgba(139, 92, 246, 0.28);
+      transform: translateY(-1px);
+    }
+  }
+
+  :global(.coaching-prose h2) {
+    margin: 0.1rem 0 0.5rem;
+    color: #c4b5fd;
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
+  }
+
   :global(.coaching-prose h3) {
-    color: #fbbf24;
+    margin: 0.75rem 0 0.4rem;
+    color: #a5b4fc;
+    font-size: 0.88rem;
+  }
+
+  :global(.coaching-prose p) {
+    margin: 0.35rem 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: #dbe4f2;
+  }
+
+  :global(.coaching-prose .coaching-bullet) {
+    position: relative;
+    margin: 0.3rem 0;
+    padding-left: 0.9rem;
+  }
+
+  :global(.coaching-prose .coaching-bullet::before) {
+    content: "";
+    position: absolute;
+    top: 0.53rem;
+    left: 0.18rem;
+    width: 0.32rem;
+    height: 0.32rem;
+    border-radius: 9999px;
+    background-color: #8b5cf6;
+  }
+
+  :global(.coaching-prose strong) {
+    color: #f8fafc;
   }
 </style>

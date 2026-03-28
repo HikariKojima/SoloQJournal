@@ -30,15 +30,40 @@ export type MatchSummaryResponse = {
     cs: number;
     gold: number;
     visionScore: number;
+    csAt15?: number;
+    csAt20?: number;
   };
   teamKills: number;
   teamDeaths: number;
-   /** Total damage dealt to champions, for DPM calculations */
-   damageToChamps?: number;
-   /** When the game ended, in milliseconds since epoch */
-   playedAt?: number;
-   /** Queue identifier (e.g., 420 Solo/Duo) */
-   queueId?: number;
+  playerPosition?: string;
+  playerRole?: string;
+  allyJungler?: {
+    champion: string;
+    kills: number;
+    deaths: number;
+    assists: number;
+    position: string;
+  } | null;
+  laneOpponent?: {
+    champion: string;
+    kills: number;
+    deaths: number;
+    assists: number;
+    position: string;
+  } | null;
+  enemyJungler?: {
+    champion: string;
+    kills: number;
+    deaths: number;
+    assists: number;
+    position: string;
+  } | null;
+  /** Total damage dealt to champions, for DPM calculations */
+  damageToChamps?: number;
+  /** When the game ended, in milliseconds since epoch */
+  playedAt?: number;
+  /** Queue identifier (e.g., 420 Solo/Duo) */
+  queueId?: number;
   items?: number[];
   summonerSpells?: {
     primary: number;
@@ -62,6 +87,8 @@ export type MatchDetailsResponse = {
     cs: number;
     gold: number;
     visionScore: number;
+    csAt15?: number;
+    csAt20?: number;
   };
   matchInfo: {
     queueId?: number;

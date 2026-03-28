@@ -57,6 +57,21 @@ function getRegionalBase(platform: string): string {
   return "https://europe.api.riotgames.com"; // default
 }
 
+const SOLO_DUO_QUEUE_ID = 420;
+const INTERNAL_BATCH_SIZE = 20;
+const CURRENT_SEASON_START_MS = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+
+export type MatchFilters = {
+  champion?: string;
+  opponentChampion?: string;
+};
+
+export type FilteredMatchesPage = {
+  matches: MatchSummaryResponse[];
+  nextOffset: number;
+  hasMore: boolean;
+};
+
 async function riotFetch(url: string): Promise<any> {
   const res = await fetch(url, {
     headers: {
@@ -67,6 +82,185 @@ async function riotFetch(url: string): Promise<any> {
     throw new Error(`Riot API error: ${res.status} ${res.statusText}`);
   }
   return res.json();
+}
+
+function normalizeChampionFilter(value?: string | null): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function matchesFilters(
+  summary: MatchSummaryResponse,
+  filters: MatchFilters,
+): boolean {
+  const champion = normalizeChampionFilter(filters.champion);
+  if (champion && summary.champion.toLowerCase() !== champion) {
+    return false;
+  }
+
+  const opponentChampion = normalizeChampionFilter(filters.opponentChampion);
+  if (
+    opponentChampion &&
+    (summary.laneOpponent?.champion ?? "").toLowerCase() !== opponentChampion
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+async function buildMatchSummary(
+  region: string,
+  puuid: string,
+  matchId: string,
+): Promise<MatchSummaryResponse | null> {
+  const getPosition = (participant: any): string => {
+    return (
+      participant?.teamPosition ||
+      participant?.individualPosition ||
+      participant?.lane ||
+      "UNKNOWN"
+    );
+  };
+
+  const toContextParticipant = (participant: any) => {
+    if (!participant) return null;
+    return {
+      champion: participant.championName,
+      kills: participant.kills,
+      deaths: participant.deaths,
+      assists: participant.assists,
+      position: getPosition(participant),
+    };
+  };
+
+  const getTimelineCsAt = async (
+    targetMatchId: string,
+    participantId: number,
+  ): Promise<{ csAt15?: number; csAt20?: number }> => {
+    try {
+      const regionalBase = getRegionalBase(region);
+      const timelineUrl = `${regionalBase}/lol/match/v5/matches/${targetMatchId}/timeline`;
+      const timeline = await riotFetch(timelineUrl);
+      const frames = timeline?.info?.frames;
+      if (!Array.isArray(frames) || frames.length === 0) {
+        return {};
+      }
+
+      const readCsAtMinute = (minute: number): number | undefined => {
+        const frame = frames[minute];
+        if (!frame?.participantFrames) return undefined;
+
+        const participantFrame =
+          frame.participantFrames[String(participantId)] ??
+          frame.participantFrames[participantId];
+        if (!participantFrame) return undefined;
+
+        const laneCs = Number(participantFrame.minionsKilled ?? 0);
+        const jungleCs = Number(participantFrame.jungleMinionsKilled ?? 0);
+        return laneCs + jungleCs;
+      };
+
+      return {
+        csAt15: readCsAtMinute(15),
+        csAt20: readCsAtMinute(20),
+      };
+    } catch (err) {
+      console.error(`Failed to fetch timeline for match ${targetMatchId}:`, err);
+      return {};
+    }
+  };
+
+  const regionalBase = getRegionalBase(region);
+  const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
+  const data = await riotFetch(url);
+
+  const participant = data.info.participants.find((p: any) => p.puuid === puuid);
+  if (!participant) return null;
+
+  const playerPosition = getPosition(participant);
+  const teamId = participant.teamId;
+  const teamParticipants = data.info.participants.filter(
+    (p: any) => p.teamId === teamId,
+  );
+  const enemyParticipants = data.info.participants.filter(
+    (p: any) => p.teamId !== teamId,
+  );
+
+  const allyJunglerParticipant =
+    playerPosition === "JUNGLE"
+      ? null
+      : teamParticipants.find(
+          (p: any) => p.puuid !== puuid && getPosition(p) === "JUNGLE",
+        ) ?? null;
+  const laneOpponentParticipant =
+    enemyParticipants.find((p: any) => getPosition(p) === playerPosition) ??
+    (playerPosition === "JUNGLE"
+      ? enemyParticipants.find((p: any) => getPosition(p) === "JUNGLE")
+      : null);
+  const enemyJunglerParticipant =
+    enemyParticipants.find((p: any) => getPosition(p) === "JUNGLE") ?? null;
+
+  const teamKills = teamParticipants.reduce(
+    (sum: number, p: any) => sum + p.kills,
+    0,
+  );
+  const teamDeaths = teamParticipants.reduce(
+    (sum: number, p: any) => sum + p.deaths,
+    0,
+  );
+
+  const damageToChamps = participant.totalDamageDealtToChampions;
+  const playedAt = data.info.gameEndTimestamp ?? data.info.gameStartTimestamp ?? null;
+
+  const kda = {
+    kills: participant.kills,
+    deaths: participant.deaths,
+    assists: participant.assists,
+    ratio:
+      participant.deaths > 0
+        ? (participant.kills + participant.assists) / participant.deaths
+        : null,
+  };
+
+  const timelineCs = await getTimelineCsAt(matchId, participant.participantId);
+
+  return {
+    matchId,
+    champion: participant.championName,
+    kda,
+    result: participant.win ? "win" : "loss",
+    durationSeconds: data.info.gameDuration,
+    stats: {
+      cs: participant.totalMinionsKilled + participant.neutralMinionsKilled,
+      gold: participant.goldEarned,
+      visionScore: participant.visionScore,
+      csAt15: timelineCs.csAt15,
+      csAt20: timelineCs.csAt20,
+    },
+    teamKills,
+    teamDeaths,
+    playerPosition,
+    playerRole: participant.role || participant.lane || "UNKNOWN",
+    allyJungler: toContextParticipant(allyJunglerParticipant),
+    laneOpponent: toContextParticipant(laneOpponentParticipant),
+    enemyJungler: toContextParticipant(enemyJunglerParticipant),
+    damageToChamps,
+    playedAt: typeof playedAt === "number" ? playedAt : undefined,
+    queueId: data.info.queueId,
+    items: [
+      participant.item0,
+      participant.item1,
+      participant.item2,
+      participant.item3,
+      participant.item4,
+      participant.item5,
+      participant.item6,
+    ].filter((id: number | null | undefined) => typeof id === "number" && id > 0),
+    summonerSpells: {
+      primary: participant.summoner1Id,
+      secondary: participant.summoner2Id,
+    },
+  };
 }
 
 export async function getSummonerByRiotId(
@@ -156,85 +350,94 @@ export async function getMatchSummaries(
   start: number = 0,
   count: number = 10,
 ): Promise<MatchSummaryResponse[]> {
-  const matchIds = await getMatchIds(region, puuid, start, count);
+  const page = await getFilteredMatchPage(region, puuid, start, count, {});
+  return page.matches;
+}
+
+export async function getFilteredMatchPage(
+  region: string,
+  puuid: string,
+  start: number = 0,
+  count: number = 10,
+  filters: MatchFilters = {},
+): Promise<FilteredMatchesPage> {
   const summaries: MatchSummaryResponse[] = [];
-  for (const matchId of matchIds) {
-    try {
-      const regionalBase = getRegionalBase(region);
-      const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
-      const data = await riotFetch(url);
+  let cursor = start;
+  let exhausted = false;
+  let reachedSeasonBoundary = false;
 
-      const participant = data.info.participants.find(
-        (p: any) => p.puuid === puuid,
-      );
-      if (!participant) continue;
+  while (!exhausted && !reachedSeasonBoundary && summaries.length < count) {
+    const matchIds = await getMatchIds(region, puuid, cursor, INTERNAL_BATCH_SIZE);
+    if (!matchIds.length) {
+      exhausted = true;
+      break;
+    }
 
-      // Calculate team statistics
-      const teamId = participant.teamId;
-      const teamParticipants = data.info.participants.filter(
-        (p: any) => p.teamId === teamId,
-      );
-      const teamKills = teamParticipants.reduce(
-        (sum: number, p: any) => sum + p.kills,
-        0,
-      );
-      const teamDeaths = teamParticipants.reduce(
-        (sum: number, p: any) => sum + p.deaths,
-        0,
-      );
+    cursor += matchIds.length;
 
-      const damageToChamps = participant.totalDamageDealtToChampions;
+    for (const matchId of matchIds) {
+      try {
+        const summary = await buildMatchSummary(region, puuid, matchId);
+        if (!summary) {
+          continue;
+        }
 
-      const playedAt =
-        data.info.gameEndTimestamp ?? data.info.gameStartTimestamp ?? null;
+        if ((summary.playedAt ?? 0) < CURRENT_SEASON_START_MS) {
+          reachedSeasonBoundary = true;
+          break;
+        }
 
-      const kda = {
-        kills: participant.kills,
-        deaths: participant.deaths,
-        assists: participant.assists,
-        ratio:
-          participant.deaths > 0
-            ? (participant.kills + participant.assists) / participant.deaths
-            : null,
-      };
+        if (summary.queueId !== SOLO_DUO_QUEUE_ID) {
+          continue;
+        }
 
-      summaries.push({
-        matchId,
-        champion: participant.championName,
-        kda,
-        result: participant.win ? "win" : "loss",
-        durationSeconds: data.info.gameDuration,
-        stats: {
-          cs: participant.totalMinionsKilled + participant.neutralMinionsKilled,
-          gold: participant.goldEarned,
-          visionScore: participant.visionScore,
-        },
-        teamKills,
-        teamDeaths,
-         damageToChamps,
-         playedAt: typeof playedAt === "number" ? playedAt : undefined,
-         queueId: data.info.queueId,
-        items: [
-          participant.item0,
-          participant.item1,
-          participant.item2,
-          participant.item3,
-          participant.item4,
-          participant.item5,
-          participant.item6,
-        ].filter(
-          (id: number | null | undefined) => typeof id === "number" && id > 0,
-        ),
-        summonerSpells: {
-          primary: participant.summoner1Id,
-          secondary: participant.summoner2Id,
-        },
-      });
-    } catch (err) {
-      console.error(`Failed to fetch match ${matchId}:`, err);
+        if (!matchesFilters(summary, filters)) {
+          continue;
+        }
+
+        summaries.push(summary);
+        if (summaries.length >= count) {
+          break;
+        }
+      } catch (err) {
+        console.error(`Failed to fetch match ${matchId}:`, err);
+      }
+    }
+
+    if (matchIds.length < INTERNAL_BATCH_SIZE) {
+      exhausted = true;
     }
   }
-  return summaries;
+
+  return {
+    matches: summaries,
+    nextOffset: cursor,
+    hasMore: !exhausted && !reachedSeasonBoundary,
+  };
+}
+
+export async function getAllFilteredMatchesForSeason(
+  region: string,
+  puuid: string,
+  filters: MatchFilters = {},
+  maxMatches: number = 400,
+): Promise<MatchSummaryResponse[]> {
+  const allMatches: MatchSummaryResponse[] = [];
+  let cursor = 0;
+  let hasMore = true;
+
+  while (hasMore && allMatches.length < maxMatches) {
+    const page = await getFilteredMatchPage(region, puuid, cursor, 25, filters);
+    allMatches.push(...page.matches);
+
+    if (!page.hasMore || page.nextOffset <= cursor) {
+      hasMore = false;
+    } else {
+      cursor = page.nextOffset;
+    }
+  }
+
+  return allMatches.slice(0, maxMatches);
 }
 
 export async function getFullProfile(

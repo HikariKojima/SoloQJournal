@@ -9,6 +9,10 @@
 import type { PageServerLoad } from "./$types";
 import { getFullProfile } from "$lib/server/riot.service";
 import type { ProfileData } from "$lib/types";
+import {
+  fetchLatestDdragonVersion,
+  getDdragonVersion,
+} from "$lib/utils/ddragon";
 
 export const load: PageServerLoad = async ({ url }) => {
   const gameName = url.searchParams.get("gameName");
@@ -16,6 +20,9 @@ export const load: PageServerLoad = async ({ url }) => {
   const platform = url.searchParams.get("platform") ?? "euw1";
 
   let profileData: ProfileData = null;
+  const ddragonVersion = await fetchLatestDdragonVersion(fetch).catch(() =>
+    getDdragonVersion(),
+  );
 
   if (gameName && tagLine) {
     try {
@@ -26,5 +33,5 @@ export const load: PageServerLoad = async ({ url }) => {
     }
   }
 
-  return { profileData, platform };
+  return { profileData, platform, ddragonVersion };
 };
