@@ -93,8 +93,7 @@
   });
 
   function championDdragonUrl(champion: string): string {
-    const normalizedKey = champion.replace(/[^A-Za-z0-9]/g, "");
-    return championIcon(normalizedKey);
+    return championIcon(champion);
   }
 
   function normalizePositionRole(value?: string | null): string | null {

@@ -93,6 +93,8 @@
     },
   ];
 
+  const PAGE_LIMIT = 12;
+
   $effect(() => {
     if (data?.platform) selectedRegion = data.platform;
   });
@@ -126,6 +128,7 @@
   function createSummonerApiUrl(options?: {
     offset?: number;
     all?: boolean;
+    limit?: number;
     champion?: string | null;
     opponentChampion?: string | null;
   }): string {
@@ -134,6 +137,7 @@
       tagLine: currentSearchTagLine,
       platform: selectedRegion,
       offset: String(options?.offset ?? 0),
+      limit: String(options?.limit ?? PAGE_LIMIT),
     });
 
     if (options?.all) params.set("all", "true");
@@ -166,7 +170,7 @@
       // Strip the # from tagLine for the API request
       const cleanTagLine = normalizedTagLine.substring(1);
       const res = await fetch(
-        `/api/summoner?gameName=${encodeURIComponent(trimmedGameName)}&tagLine=${encodeURIComponent(cleanTagLine)}&platform=${encodeURIComponent(selectedRegion)}`,
+        `/api/summoner?gameName=${encodeURIComponent(trimmedGameName)}&tagLine=${encodeURIComponent(cleanTagLine)}&platform=${encodeURIComponent(selectedRegion)}&limit=${String(PAGE_LIMIT)}`,
       );
       if (!res.ok) throw new Error(await res.text());
       const fetchedProfile:
@@ -230,33 +234,48 @@
   }
 
   async function loadMore() {
+    debugLog(
+      `loadMore called | hasMore=${String(hasMore)} | isLoadingMore=${String(isLoadingMore)} | nextOffset=${String(nextOffset)}`,
+    );
+
     if (!currentProfile || isLoadingMore || !hasMore) {
+      debugLog("loadMore aborted due to guard condition");
       return;
     }
 
     isLoadingMore = true;
     try {
+      debugLog(`fetch start with offset=${String(nextOffset)}`);
       const res = await fetch(
         createSummonerApiUrl({
           offset: nextOffset,
+          limit: PAGE_LIMIT,
         }),
       );
       if (!res.ok) throw new Error(await res.text());
 
       const response = await res.json();
       const newMatches = response.matches || [];
+      debugLog(
+        `fetch success | newMatches=${String(newMatches.length)} | response.nextOffset=${String(response.nextOffset)} | response.hasMore=${String(response.hasMore)}`,
+      );
 
       // Append new matches to existing list
       if (currentProfile.matches) {
         currentProfile.matches = [...currentProfile.matches, ...newMatches];
       }
 
-      nextOffset = response.nextOffset ?? nextOffset + 10;
-      hasMore = response.hasMore ?? newMatches.length >= 10;
+      nextOffset = response.nextOffset ?? nextOffset + PAGE_LIMIT;
+      hasMore = response.hasMore ?? newMatches.length >= PAGE_LIMIT;
+      debugLog(
+        `state updated | totalMatches=${String(currentProfile.matches?.length ?? 0)} | nextOffset=${String(nextOffset)} | hasMore=${String(hasMore)}`,
+      );
     } catch (err: any) {
       console.error("Failed to load more matches:", err.message);
+      debugLog(`fetch error | ${err.message}`);
     } finally {
       isLoadingMore = false;
+      debugLog("loadMore finished");
     }
   }
 
@@ -439,6 +458,15 @@
   let isLoadingMore = $state(false);
   let hasMore = $state(true);
   let dismissed = $state(false);
+  let sentinelElement = $state<HTMLElement | null>(null);
+  let debugInfiniteScroll = $state(true);
+  let debugEvents = $state<string[]>([]);
+
+  function debugLog(message: string) {
+    if (!debugInfiniteScroll) return;
+    const stamp = new Date().toLocaleTimeString();
+    debugEvents = [`${stamp} - ${message}`, ...debugEvents].slice(0, 20);
+  }
 
   const currentProfileKey = $derived.by(() => {
     if (!currentProfile) return "";
@@ -764,6 +792,36 @@
     }
   });
 
+  // Keep the infinite-scroll observer in a reactive effect so it re-attaches
+  // whenever the sentinel element is created (for example after a new search).
+  $effect(() => {
+    if (typeof window === "undefined" || !sentinelElement) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const isIntersecting = Boolean(entries[0]?.isIntersecting);
+        debugLog(
+          `observer event | intersecting=${String(isIntersecting)} | hasMore=${String(hasMore)} | isLoadingMore=${String(isLoadingMore)}`,
+        );
+        if (isIntersecting && hasMore && !isLoadingMore) {
+          void loadMore();
+        }
+      },
+      {
+        rootMargin: "900px",
+        threshold: 0,
+      },
+    );
+
+    observer.observe(sentinelElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  });
+
   // Sync profileStore to localStorage
   $effect(() => {
     if (typeof window !== "undefined") {
@@ -820,7 +878,7 @@
   <aside class="w-full lg:w-64 p-4 match-sidebar">
     <h2 class="text-xl font-bold mb-4">Saved Profiles</h2>
     <ul class="space-y-2">
-      {#each profileStore.list as profile, i (profile.gameName + profile.tagLine)}
+      {#each profileStore.list as profile, i (`${profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
         <li class="flex items-center gap-2">
           <button
             class="flex-1 text-left p-2 rounded cursor-pointer hover:bg-gray-700 transition {i ===
@@ -833,6 +891,7 @@
             }}
           >
             {profile.gameName}{profile.tagLine}
+            <span class="ml-2 text-sm text-gray-400 uppercase">{profile.region}</span>
           </button>
           <button
             type="button"
@@ -1130,27 +1189,73 @@
         {/each}
       </div>
 
-      <!-- Load more button -->
-      <div class="mt-6 flex justify-center">
-        {#if hasMore}
-          <button
-            onclick={loadMore}
-            disabled={isLoadingMore}
-            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoadingMore ? "Loading..." : "Load more"}
-          </button>
-          {#if hasActiveMatchFilters}
-            <p class="text-gray-300 text-center match-load-more ml-4">
-              Filters apply to loaded matches. Load more to refine results.
-            </p>
-          {/if}
-        {:else}
-          <p class="text-gray-400 text-center match-load-more">
-            All matches loaded
+      <!-- Infinite scroll sentinel - invisible element that triggers loading when visible -->
+      <!-- The Intersection Observer watches this element to detect when user scrolls near bottom -->
+      <div bind:this={sentinelElement} class="mt-8"></div>
+
+      <!-- Loading indicator for infinite scroll -->
+      {#if isLoadingMore}
+        <div class="mt-6 flex justify-center items-center gap-3">
+          <!-- Spinning loader animation -->
+          <div
+            class="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
+          ></div>
+          <p class="text-gray-400">Loading more matches...</p>
+        </div>
+      {/if}
+
+      <!-- Message when all matches are loaded -->
+      {#if !hasMore && currentProfile.matches && currentProfile.matches.length > 0}
+        <div class="mt-6 text-center">
+          <p class="text-gray-400">All matches loaded</p>
+        </div>
+      {/if}
+
+      <!-- Info message about filters -->
+      {#if hasActiveMatchFilters && hasMore}
+        <div class="mt-4 text-center">
+          <p class="text-gray-300 text-sm">
+            Filters apply to loaded matches. Scroll down to load more and refine
+            results.
           </p>
-        {/if}
-      </div>
+        </div>
+      {/if}
+
+      {#if debugInfiniteScroll}
+        <div class="mt-6 p-3 rounded border border-amber-500/40 bg-black/35 text-amber-100 text-xs">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <p class="font-semibold">Infinite Scroll Debug</p>
+            <button
+              type="button"
+              class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30"
+              onclick={() => {
+                debugEvents = [];
+              }}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+            <p>hasMore: <strong>{String(hasMore)}</strong></p>
+            <p>isLoadingMore: <strong>{String(isLoadingMore)}</strong></p>
+            <p>nextOffset: <strong>{nextOffset}</strong></p>
+            <p>matches: <strong>{currentProfile.matches?.length ?? 0}</strong></p>
+            <p>sentinel: <strong>{sentinelElement ? "attached" : "missing"}</strong></p>
+            <p>filtersActive: <strong>{String(hasActiveMatchFilters)}</strong></p>
+          </div>
+
+          <div class="max-h-44 overflow-y-auto space-y-1 border-t border-amber-500/20 pt-2">
+            {#if !debugEvents.length}
+              <p class="text-amber-200/70">No events yet. Scroll down to trigger observer.</p>
+            {:else}
+              {#each debugEvents as eventLine, index (`${eventLine}-${index}`)}
+                <p class="font-mono">{eventLine}</p>
+              {/each}
+            {/if}
+          </div>
+        </div>
+      {/if}
 
       {#if reflectionModalOpen && selectedMatch}
         <div

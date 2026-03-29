@@ -4,6 +4,11 @@
  * In SvelteKit, load functions in +page.server.ts populate the page's data prop for initial render.
  * Key concept: SSR improves performance and SEO by rendering with data; check query params for pre-fetching.
  * Example: Visiting /?gameName=Player&tagLine=NA1 loads profile data server-side for instant render.
+ * 
+ * PERFORMANCE NOTES:
+ * - Only load the initial 5 matches for SSR (fast initial render)
+ * - Client-side can load more matches on demand with pagination
+ * - Timeline data is expensive - only fetch on detailed match views
  */
 
 import type { PageServerLoad } from "./$types";
@@ -20,6 +25,8 @@ export const load: PageServerLoad = async ({ url }) => {
   const platform = url.searchParams.get("platform") ?? "euw1";
 
   let profileData: ProfileData = null;
+  
+  // Fetch ddragon version in parallel with profile data
   const ddragonVersion = await fetchLatestDdragonVersion(fetch).catch(() =>
     getDdragonVersion(),
   );

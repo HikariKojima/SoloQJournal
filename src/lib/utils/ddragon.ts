@@ -50,8 +50,28 @@ export async function fetchLatestDdragonVersion(
   return ddragonVersionRequest;
 }
 
+const CHAMPION_KEY_ALIASES: Record<string, string> = {
+  fiddlesticks: "Fiddlesticks",
+  fiddlesticksold: "Fiddlesticks",
+  fiddlesticksrework: "Fiddlesticks",
+  fiddlestick: "Fiddlesticks",
+  monkeyking: "MonkeyKing",
+  wukong: "MonkeyKing",
+  nunu: "Nunu",
+  nunuwillump: "Nunu",
+  renata: "RenataGlasc",
+  renataglasc: "RenataGlasc",
+};
+
+function toChampionDataDragonKey(name: string): string {
+  const compact = name.replace(/[^A-Za-z0-9]/g, "");
+  const alias = CHAMPION_KEY_ALIASES[compact.toLowerCase()];
+  return alias ?? compact;
+}
+
 export function championIcon(name: string, version = getDdragonVersion()): string {
-  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${name}.png`;
+  const championKey = toChampionDataDragonKey(name);
+  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${championKey}.png`;
 }
 
 export function itemIcon(id: number, version = getDdragonVersion()): string {

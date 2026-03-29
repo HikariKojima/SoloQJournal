@@ -13,6 +13,64 @@ import type {
   SummonerResponse,
 } from "$lib/types";
 
+// ===== CACHING LAYER =====
+type CacheEntry<T> = {
+  data: T;
+  expiresAt: number;
+};
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const apiCache = new Map<string, CacheEntry<any>>();
+const timelineCache = new Map<string, CacheEntry<any>>();
+
+function getCacheKey(...parts: string[]): string {
+  return parts.join("::");
+}
+
+function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
+  cache.set(key, {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+}
+
+// ===== RATE LIMITING =====
+let requestCount = 0;
+let windowResetAt = Date.now() + 60_000;
+const RATE_LIMIT_MAX = 100; // Conservative: Riot allows 120/min
+
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  if (now > windowResetAt) {
+    requestCount = 0;
+    windowResetAt = now + 60_000;
+  }
+  return requestCount < RATE_LIMIT_MAX;
+}
+
+function recordRequest(): void {
+  requestCount++;
+}
+
+async function waitForRateLimit(): Promise<void> {
+  if (!checkRateLimit()) {
+    const waitTime = windowResetAt - Date.now() + 100;
+    await new Promise((resolve) => setTimeout(resolve, Math.max(100, waitTime)));
+    requestCount = 0;
+    windowResetAt = Date.now() + 60_000;
+  }
+}
+
 // Riot API base URLs
 const PLATFORM_BASES: Record<string, string> = {
   na1: "https://na1.api.riotgames.com",
@@ -72,7 +130,17 @@ export type FilteredMatchesPage = {
   hasMore: boolean;
 };
 
-async function riotFetch(url: string): Promise<any> {
+async function riotFetch(url: string, useCache: boolean = true): Promise<any> {
+  // Check cache first (skip for mutations)
+  if (useCache) {
+    const cached = getCached(apiCache, url);
+    if (cached) return cached;
+  }
+
+  // Rate limit check
+  await waitForRateLimit();
+  recordRequest();
+
   const res = await fetch(url, {
     headers: {
       "X-Riot-Token": API_KEY,
@@ -81,7 +149,15 @@ async function riotFetch(url: string): Promise<any> {
   if (!res.ok) {
     throw new Error(`Riot API error: ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  
+  const data = await res.json();
+  
+  // Cache successful responses
+  if (useCache) {
+    setCached(apiCache, url, data);
+  }
+  
+  return data;
 }
 
 function normalizeChampionFilter(value?: string | null): string {
@@ -112,6 +188,7 @@ async function buildMatchSummary(
   region: string,
   puuid: string,
   matchId: string,
+  includeTimeline: boolean = false,
 ): Promise<MatchSummaryResponse | null> {
   const getPosition = (participant: any): string => {
     return (
@@ -138,9 +215,18 @@ async function buildMatchSummary(
     participantId: number,
   ): Promise<{ csAt15?: number; csAt20?: number }> => {
     try {
+      // Check timeline cache first
+      const cacheKey = getCacheKey("timeline", targetMatchId, String(participantId));
+      const cached = getCached(timelineCache, cacheKey);
+      if (cached) return cached;
+
       const regionalBase = getRegionalBase(region);
       const timelineUrl = `${regionalBase}/lol/match/v5/matches/${targetMatchId}/timeline`;
-      const timeline = await riotFetch(timelineUrl);
+      
+      await waitForRateLimit();
+      recordRequest();
+      
+      const timeline = await riotFetch(timelineUrl, false); // Don't use API cache for timeline
       const frames = timeline?.info?.frames;
       if (!Array.isArray(frames) || frames.length === 0) {
         return {};
@@ -172,7 +258,7 @@ async function buildMatchSummary(
 
   const regionalBase = getRegionalBase(region);
   const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
-  const data = await riotFetch(url);
+  const data = await riotFetch(url, true);
 
   const participant = data.info.participants.find((p: any) => p.puuid === puuid);
   if (!participant) return null;
@@ -222,7 +308,11 @@ async function buildMatchSummary(
         : null,
   };
 
-  const timelineCs = await getTimelineCsAt(matchId, participant.participantId);
+  // Only fetch timeline if explicitly requested (expensive operation)
+  let timelineCs: { csAt15?: number; csAt20?: number } = {};
+  if (includeTimeline) {
+    timelineCs = await getTimelineCsAt(matchId, participant.participantId);
+  }
 
   return {
     matchId,
@@ -270,7 +360,7 @@ export async function getSummonerByRiotId(
 ): Promise<{ puuid: string; gameName: string; tagLine: string }> {
   const accountBase = getAccountBase(platform);
   const url = `${accountBase}/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-  return riotFetch(url);
+  return riotFetch(url, true);
 }
 
 export async function getSummonerByPuuid(
@@ -279,7 +369,7 @@ export async function getSummonerByPuuid(
 ): Promise<SummonerResponse> {
   const base = PLATFORM_BASES[region] || `https://${region}.api.riotgames.com`;
   const url = `${base}/lol/summoner/v4/summoners/by-puuid/${puuid}`;
-  const data = await riotFetch(url);
+  const data = await riotFetch(url, true);
   return {
     puuid: data.puuid,
     id: data.id,
@@ -298,7 +388,7 @@ export async function getMatchIds(
 ): Promise<string[]> {
   const regionalBase = getRegionalBase(region);
   const url = `${regionalBase}/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${start}&count=${count}`;
-  return riotFetch(url);
+  return riotFetch(url, true);
 }
 
 export async function getMatchDetails(
@@ -308,7 +398,7 @@ export async function getMatchDetails(
 ): Promise<MatchDetailsResponse> {
   const regionalBase = getRegionalBase(region);
   const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
-  const data = await riotFetch(url);
+  const data = await riotFetch(url, true);
 
   const participant = data.info.participants.find(
     (p: any) => p.puuid === puuid,
@@ -365,9 +455,10 @@ export async function getFilteredMatchPage(
   let cursor = start;
   let exhausted = false;
   let reachedSeasonBoundary = false;
+  const effectiveBatchSize = Math.max(1, Math.min(INTERNAL_BATCH_SIZE, count));
 
   while (!exhausted && !reachedSeasonBoundary && summaries.length < count) {
-    const matchIds = await getMatchIds(region, puuid, cursor, INTERNAL_BATCH_SIZE);
+    const matchIds = await getMatchIds(region, puuid, cursor, effectiveBatchSize);
     if (!matchIds.length) {
       exhausted = true;
       break;
@@ -375,36 +466,41 @@ export async function getFilteredMatchPage(
 
     cursor += matchIds.length;
 
-    for (const matchId of matchIds) {
-      try {
-        const summary = await buildMatchSummary(region, puuid, matchId);
-        if (!summary) {
-          continue;
-        }
-
-        if ((summary.playedAt ?? 0) < CURRENT_SEASON_START_MS) {
-          reachedSeasonBoundary = true;
-          break;
-        }
-
-        if (summary.queueId !== SOLO_DUO_QUEUE_ID) {
-          continue;
-        }
-
-        if (!matchesFilters(summary, filters)) {
-          continue;
-        }
-
-        summaries.push(summary);
-        if (summaries.length >= count) {
-          break;
-        }
-      } catch (err) {
+    // Fetch all matches in parallel instead of sequentially
+    const summaryPromises = matchIds.map((matchId) =>
+      buildMatchSummary(region, puuid, matchId, false).catch((err) => {
         console.error(`Failed to fetch match ${matchId}:`, err);
+        return null;
+      })
+    );
+
+    const batchSummaries = await Promise.all(summaryPromises);
+
+    for (const summary of batchSummaries) {
+      if (!summary) {
+        continue;
+      }
+
+      if ((summary.playedAt ?? 0) < CURRENT_SEASON_START_MS) {
+        reachedSeasonBoundary = true;
+        break;
+      }
+
+      if (summary.queueId !== SOLO_DUO_QUEUE_ID) {
+        continue;
+      }
+
+      if (!matchesFilters(summary, filters)) {
+        continue;
+      }
+
+      summaries.push(summary);
+      if (summaries.length >= count) {
+        break;
       }
     }
 
-    if (matchIds.length < INTERNAL_BATCH_SIZE) {
+    if (matchIds.length < effectiveBatchSize) {
       exhausted = true;
     }
   }
