@@ -30,7 +30,7 @@ export type MatchSummaryResponse = {
     cs: number;
     gold: number;
     visionScore: number;
-    csAt15?: number;
+    csAt10?: number;
     csAt20?: number;
   };
   teamKills: number;
@@ -87,7 +87,7 @@ export type MatchDetailsResponse = {
     cs: number;
     gold: number;
     visionScore: number;
-    csAt15?: number;
+    csAt10?: number;
     csAt20?: number;
   };
   matchInfo: {

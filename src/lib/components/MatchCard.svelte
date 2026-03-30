@@ -94,7 +94,7 @@
 
   function championDdragonUrl(champion: string): string {
     return championIcon(champion);
-  }
+}
 
   function normalizePositionRole(value?: string | null): string | null {
     if (!value) return null;

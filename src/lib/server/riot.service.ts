@@ -184,6 +184,57 @@ function matchesFilters(
   return true;
 }
 
+async function getTimelineCsAt(
+  region: string,
+  targetMatchId: string,
+  participantId: number,
+): Promise<{ csAt10?: number; csAt20?: number }> {
+  try {
+    // Check timeline cache first
+    const cacheKey = getCacheKey(
+      "timeline",
+      region,
+      targetMatchId,
+      String(participantId),
+    );
+    const cached = getCached(timelineCache, cacheKey);
+    if (cached) return cached;
+
+    const regionalBase = getRegionalBase(region);
+    const timelineUrl = `${regionalBase}/lol/match/v5/matches/${targetMatchId}/timeline`;
+    const timeline = await riotFetch(timelineUrl, false); // Don't use API cache for timeline
+    const frames = timeline?.info?.frames;
+    if (!Array.isArray(frames) || frames.length === 0) {
+      return {};
+    }
+
+    const readCsAtMinute = (minute: number): number | undefined => {
+      const frame = frames[minute];
+      if (!frame?.participantFrames) return undefined;
+
+      const participantFrame =
+        frame.participantFrames[String(participantId)] ??
+        frame.participantFrames[participantId];
+      if (!participantFrame) return undefined;
+
+      const laneCs = Number(participantFrame.minionsKilled ?? 0);
+      const jungleCs = Number(participantFrame.jungleMinionsKilled ?? 0);
+      return laneCs + jungleCs;
+    };
+
+    const timelineCs = {
+      csAt10: readCsAtMinute(10),
+      csAt20: readCsAtMinute(20),
+    };
+
+    setCached(timelineCache, cacheKey, timelineCs);
+    return timelineCs;
+  } catch (err) {
+    console.error(`Failed to fetch timeline for match ${targetMatchId}:`, err);
+    return {};
+  }
+}
+
 async function buildMatchSummary(
   region: string,
   puuid: string,
@@ -208,52 +259,6 @@ async function buildMatchSummary(
       assists: participant.assists,
       position: getPosition(participant),
     };
-  };
-
-  const getTimelineCsAt = async (
-    targetMatchId: string,
-    participantId: number,
-  ): Promise<{ csAt15?: number; csAt20?: number }> => {
-    try {
-      // Check timeline cache first
-      const cacheKey = getCacheKey("timeline", targetMatchId, String(participantId));
-      const cached = getCached(timelineCache, cacheKey);
-      if (cached) return cached;
-
-      const regionalBase = getRegionalBase(region);
-      const timelineUrl = `${regionalBase}/lol/match/v5/matches/${targetMatchId}/timeline`;
-      
-      await waitForRateLimit();
-      recordRequest();
-      
-      const timeline = await riotFetch(timelineUrl, false); // Don't use API cache for timeline
-      const frames = timeline?.info?.frames;
-      if (!Array.isArray(frames) || frames.length === 0) {
-        return {};
-      }
-
-      const readCsAtMinute = (minute: number): number | undefined => {
-        const frame = frames[minute];
-        if (!frame?.participantFrames) return undefined;
-
-        const participantFrame =
-          frame.participantFrames[String(participantId)] ??
-          frame.participantFrames[participantId];
-        if (!participantFrame) return undefined;
-
-        const laneCs = Number(participantFrame.minionsKilled ?? 0);
-        const jungleCs = Number(participantFrame.jungleMinionsKilled ?? 0);
-        return laneCs + jungleCs;
-      };
-
-      return {
-        csAt15: readCsAtMinute(15),
-        csAt20: readCsAtMinute(20),
-      };
-    } catch (err) {
-      console.error(`Failed to fetch timeline for match ${targetMatchId}:`, err);
-      return {};
-    }
   };
 
   const regionalBase = getRegionalBase(region);
@@ -309,9 +314,9 @@ async function buildMatchSummary(
   };
 
   // Only fetch timeline if explicitly requested (expensive operation)
-  let timelineCs: { csAt15?: number; csAt20?: number } = {};
+  let timelineCs: { csAt10?: number; csAt20?: number } = {};
   if (includeTimeline) {
-    timelineCs = await getTimelineCsAt(matchId, participant.participantId);
+    timelineCs = await getTimelineCsAt(region, matchId, participant.participantId);
   }
 
   return {
@@ -324,7 +329,7 @@ async function buildMatchSummary(
       cs: participant.totalMinionsKilled + participant.neutralMinionsKilled,
       gold: participant.goldEarned,
       visionScore: participant.visionScore,
-      csAt15: timelineCs.csAt15,
+      csAt10: timelineCs.csAt10,
       csAt20: timelineCs.csAt20,
     },
     teamKills,
@@ -395,6 +400,7 @@ export async function getMatchDetails(
   region: string,
   matchId: string,
   puuid: string,
+  includeTimeline: boolean = false,
 ): Promise<MatchDetailsResponse> {
   const regionalBase = getRegionalBase(region);
   const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
@@ -415,6 +421,11 @@ export async function getMatchDetails(
         : null,
   };
 
+  let timelineCs: { csAt10?: number; csAt20?: number } = {};
+  if (includeTimeline) {
+    timelineCs = await getTimelineCsAt(region, matchId, participant.participantId);
+  }
+
   return {
     matchId,
     gameDurationSeconds: data.info.gameDuration,
@@ -426,6 +437,8 @@ export async function getMatchDetails(
       cs: participant.totalMinionsKilled + participant.neutralMinionsKilled,
       gold: participant.goldEarned,
       visionScore: participant.visionScore,
+      csAt10: timelineCs.csAt10,
+      csAt20: timelineCs.csAt20,
     },
     matchInfo: {
       queueId: data.info.queueId,

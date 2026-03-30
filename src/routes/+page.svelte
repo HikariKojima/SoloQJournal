@@ -454,6 +454,7 @@
   let wentBad = $state("");
   let emotionalReflection = $state("");
   let reflectionSaved = $state(false);
+  let isLoadingTimelineStats = $state(false);
   let tiltAlertDismissed = $state(false);
   let isLoadingMore = $state(false);
   let hasMore = $state(true);
@@ -533,7 +534,7 @@
         goldPerMin: 0,
         kpPercent: 0,
         deathPercent: 0,
-        csAt15: null as number | null,
+        csAt10: null as number | null,
         csAt20: null as number | null,
       };
     }
@@ -572,9 +573,9 @@
       goldPerMin,
       kpPercent,
       deathPercent,
-      csAt15:
-        typeof selectedMatch.stats.csAt15 === "number"
-          ? selectedMatch.stats.csAt15
+      csAt10:
+        typeof selectedMatch.stats.csAt10 === "number"
+          ? selectedMatch.stats.csAt10
           : null,
       csAt20:
         typeof selectedMatch.stats.csAt20 === "number"
@@ -599,7 +600,9 @@
     return learningObjectives.at(-1) ?? "";
   }
 
-  function openReflection(match: import("$lib/types").MatchSummaryResponse) {
+  async function openReflection(
+    match: import("$lib/types").MatchSummaryResponse,
+  ) {
     if (!currentProfile) return;
     selectedMatch = match;
     const key = reflectionKey(match.matchId);
@@ -634,6 +637,69 @@
       } else {
         localStorage.removeItem("currentLearningObjective");
       }
+    }
+
+    if (
+      typeof match.stats.csAt10 === "number" &&
+      typeof match.stats.csAt20 === "number"
+    ) {
+      return;
+    }
+
+    isLoadingTimelineStats = true;
+    try {
+      const params = new URLSearchParams({
+        matchId: match.matchId,
+        puuid: currentProfile.summoner.puuid,
+        platform: selectedRegion,
+      });
+
+      const res = await fetch(`/api/match?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const payload = await res.json();
+      const csAt10 =
+        typeof payload?.stats?.csAt10 === "number"
+          ? payload.stats.csAt10
+          : undefined;
+      const csAt20 =
+        typeof payload?.stats?.csAt20 === "number"
+          ? payload.stats.csAt20
+          : undefined;
+
+      // Update selected match in modal state
+      if (selectedMatch?.matchId === match.matchId) {
+        selectedMatch = {
+          ...selectedMatch,
+          stats: {
+            ...selectedMatch.stats,
+            csAt10,
+            csAt20,
+          },
+        };
+      }
+
+      // Keep the list data in sync to avoid repeated requests for the same match.
+      if (currentProfile.matches?.length) {
+        currentProfile.matches = currentProfile.matches.map((entry) =>
+          entry.matchId === match.matchId
+            ? {
+                ...entry,
+                stats: {
+                  ...entry.stats,
+                  csAt10,
+                  csAt20,
+                },
+              }
+            : entry,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to fetch timeline CS stats:", err);
+    } finally {
+      isLoadingTimelineStats = false;
     }
   }
 
@@ -1268,7 +1334,7 @@
             <div class="flex justify-between items-start mb-4">
               <div>
                 <h2 class="text-xl font-bold mb-1">
-                  Journal reflection - {selectedMatch.champion}
+                  Journal
                 </h2>
                 <p class="text-base text-gray-400">
                   Match: {selectedMatch.kda.kills}/{selectedMatch.kda
@@ -1383,23 +1449,25 @@
                   </p>
                 </div>
 
-                <!-- CS at 15 -->
+                <!-- CS at 10 -->
                 <div class="bg-gray-700 p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">CS at 15</p>
+                  <p class="text-base text-gray-400 mb-1">CS at 10</p>
                   <p
-                    class="text-2xl font-bold {matchStats.csAt15 === null
+                    class="text-2xl font-bold {matchStats.csAt10 === null
                       ? 'text-gray-500'
-                      : matchStats.csAt15 >= 120
+                      : matchStats.csAt10 >= 80
                         ? 'text-green-400'
-                        : matchStats.csAt15 >= 95
+                        : matchStats.csAt10 >= 65
                           ? 'text-lime-400'
-                          : matchStats.csAt15 >= 75
+                          : matchStats.csAt10 >= 50
                             ? 'text-yellow-400'
                             : 'text-red-400'}"
                   >
-                    {matchStats.csAt15 === null
+                    {isLoadingTimelineStats && matchStats.csAt10 === null
+                      ? "..."
+                      : matchStats.csAt10 === null
                       ? "-"
-                      : matchStats.csAt15.toFixed(0)}
+                      : matchStats.csAt10.toFixed(0)}
                   </p>
                 </div>
 
@@ -1417,7 +1485,9 @@
                             ? 'text-yellow-400'
                             : 'text-red-400'}"
                   >
-                    {matchStats.csAt20 === null
+                    {isLoadingTimelineStats && matchStats.csAt20 === null
+                      ? "..."
+                      : matchStats.csAt20 === null
                       ? "-"
                       : matchStats.csAt20.toFixed(0)}
                   </p>
