@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import MatchCard from "$lib/components/MatchCard.svelte";
   import { profileStore } from "$lib/profile.svelte";
   import type { PageData } from "./$types";
@@ -443,6 +443,7 @@
   let reflectionError = $state("");
   let matchReflections = $state<Record<string, string>>({});
   let learningObjectiveDropdownEl = $state<HTMLElement | null>(null);
+  let learningObjectiveInputEl = $state<HTMLInputElement | null>(null);
   let isLearningObjectiveOpen = $state(false);
   let learningObjectives = $state<string[]>([]);
   let learningObjectiveInput = $state("");
@@ -757,11 +758,14 @@
     }
   }
 
-  function updateObjective(value: string) {
+  async function updateObjective(value: string) {
     if (value === "__add__") {
       selectedObjective = resolveObjectiveSelection(selectedObjective);
+      isLearningObjectiveOpen = false;
       isAddingObjective = true;
       learningObjectiveInput = "";
+      await tick();
+      learningObjectiveInputEl?.focus();
       return;
     }
 
@@ -775,6 +779,11 @@
   }
 
   function toggleLearningObjectiveDropdown() {
+    if (isAddingObjective) {
+      isAddingObjective = false;
+      learningObjectiveInput = "";
+    }
+
     isLearningObjectiveOpen = !isLearningObjectiveOpen;
     if (!isLearningObjectiveOpen) {
       isAddingObjective = false;
@@ -895,6 +904,24 @@
     }
   });
 
+  $effect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const modalClass = "modal-open";
+
+    if (reflectionModalOpen) {
+      document.body.classList.add(modalClass);
+    } else {
+      document.body.classList.remove(modalClass);
+    }
+
+    return () => {
+      document.body.classList.remove(modalClass);
+    };
+  });
+
   function toggleChampionFilter() {
     isChampionFilterOpen = !isChampionFilterOpen;
   }
@@ -928,10 +955,15 @@
       }
     }
 
-    if (isLearningObjectiveOpen && learningObjectiveDropdownEl && target) {
+    if (
+      (isLearningObjectiveOpen || isAddingObjective) &&
+      learningObjectiveDropdownEl &&
+      target
+    ) {
       if (!learningObjectiveDropdownEl.contains(target)) {
         isLearningObjectiveOpen = false;
         isAddingObjective = false;
+        learningObjectiveInput = "";
       }
     }
   }
@@ -1325,10 +1357,25 @@
 
       {#if reflectionModalOpen && selectedMatch}
         <div
-          class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          class="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          role="button"
+          tabindex="0"
+          aria-label="Close journal modal"
+          onclick={(event) => {
+            if (event.target !== event.currentTarget) {
+              return;
+            }
+            closeReflection();
+          }}
+          onkeydown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeReflection();
+            }
+          }}
         >
           <div
-            class="w-[min(95vw,750px)] bg-gray-900 border border-gray-700 rounded p-6 shadow-lg max-h-[90vh] overflow-y-auto text-base leading-relaxed"
+            class="journal-modal relative w-[min(95vw,750px)] bg-gray-900 border border-gray-700 rounded p-6 shadow-lg max-h-[90vh] overflow-y-auto text-base leading-relaxed"
           >
             <!-- Header with result color coding -->
             <div class="flex justify-between items-start mb-4">
@@ -1506,7 +1553,7 @@
                 <button
                   id="learning-objective"
                   type="button"
-                  class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-gray-300 text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none flex items-center justify-between"
+                  class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-gray-300 text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 flex items-center justify-between select-none"
                   style="background-color: #131620; border: 1px solid #252b3d; color: #e5e7eb;"
                   onclick={toggleLearningObjectiveDropdown}
                 >
@@ -1528,7 +1575,7 @@
                   >
                     <button
                       type="button"
-                      class="w-full text-left px-3 py-2 text-base text-gray-300 hover:bg-gray-800 cursor-pointer"
+                      class="w-full text-left px-3 py-2 text-base text-gray-300 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 focus:text-purple-400"
                       onclick={() => {
                         updateObjective("");
                         isLearningObjectiveOpen = false;
@@ -1541,9 +1588,9 @@
                       <div class="flex items-center border-t border-gray-800">
                         <button
                           type="button"
-                          class="flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer {selectedObjective ===
+                          class="flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 {selectedObjective ===
                           objective
-                            ? 'text-purple-300'
+                            ? 'text-white'
                             : 'text-gray-300'}"
                           onclick={() => {
                             updateObjective(objective);
@@ -1567,46 +1614,52 @@
                     {/each}
 
                     <div class="border-t border-gray-800">
-                      {#if isAddingObjective}
-                        <div class="p-2 flex gap-2">
-                          <input
-                            type="text"
-                            bind:value={learningObjectiveInput}
-                            onkeydown={handleLearningObjectiveInputKeydown}
-                            placeholder="Enter new objective..."
-                            class="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-base text-gray-300"
-                            style="background-color: #0c0e14; border: 1px solid #252b3d;"
-                          />
-                          <button
-                            type="button"
-                            onclick={addLearningObjective}
-                            class="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-base font-semibold text-white cursor-pointer"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onclick={() => {
-                              isAddingObjective = false;
-                              learningObjectiveInput = "";
-                            }}
-                            class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-base text-gray-200 cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      {:else}
-                        <button
-                          type="button"
-                          class="w-full text-left px-3 py-2 text-base text-purple-300 hover:bg-gray-800 cursor-pointer"
-                          onclick={(event) => {
-                            event.stopPropagation();
-                            updateObjective("__add__");
-                          }}
-                        >
-                          Add new learning objective
-                        </button>
-                      {/if}
+                      <button
+                        type="button"
+                        class="w-full text-left px-3 py-2 text-base text-purple-400 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 focus:text-purple-300"
+                        onclick={(event) => {
+                          event.stopPropagation();
+                          updateObjective("__add__");
+                        }}
+                      >
+                        Add new learning objective
+                      </button>
+                    </div>
+                  </div>
+                {/if}
+
+                {#if isAddingObjective}
+                  <div
+                    class="mt-1 rounded border border-gray-700 bg-gray-900 shadow-lg"
+                    style="background-color: #131620; border: 1px solid #252b3d;"
+                  >
+                    <div class="p-2 flex gap-2">
+                      <input
+                        type="text"
+                        bind:this={learningObjectiveInputEl}
+                        bind:value={learningObjectiveInput}
+                        onkeydown={handleLearningObjectiveInputKeydown}
+                        placeholder="Enter new objective..."
+                        class="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500"
+                        style="background-color: #0c0e14; border: 1px solid #252b3d;"
+                      />
+                      <button
+                        type="button"
+                        onclick={addLearningObjective}
+                        class="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-base font-semibold text-white cursor-pointer select-none"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onclick={() => {
+                          isAddingObjective = false;
+                          learningObjectiveInput = "";
+                        }}
+                        class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-base text-gray-200 cursor-pointer select-none"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 {/if}
@@ -1720,11 +1773,13 @@
 
             <!-- Auto-save indicator -->
             {#if reflectionSaved}
-              <p
-                class="text-base text-purple-400 text-center mb-3 animate-pulse"
+              <div
+                class="pointer-events-none absolute bottom-4 right-4 rounded-md border border-purple-500/50 bg-black/75 px-3 py-1.5 text-sm text-purple-300 shadow-lg animate-pulse"
+                role="status"
+                aria-live="polite"
               >
                 Saved ✓
-              </p>
+              </div>
             {/if}
 
             <!-- Modal Footer -->
