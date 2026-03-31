@@ -164,10 +164,16 @@
     
     isLoadingFilters = true;
     try {
+      // Start this a little after the main profile/matches fetch so we
+      // don't burst the free Riot API key immediately.
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
       const res = await fetch(
         createSummonerApiUrl({
           all: true,
-          limit: 300, // Fetch up to 300 matches for comprehensive filter options
+          // Fetch up to 150 matches for comprehensive filter options
+          // while staying under Riot's rate limits.
+          limit: 150,
         }),
       );
       if (!res.ok) throw new Error(await res.text());

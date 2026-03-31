@@ -116,7 +116,9 @@ function getRegionalBase(platform: string): string {
 }
 
 const SOLO_DUO_QUEUE_ID = 420;
-const INTERNAL_BATCH_SIZE = 20;
+// Keep parallel match-detail requests conservative to avoid Riot's
+// short-window (per-second) rate limits when loading many matches.
+const INTERNAL_BATCH_SIZE = 10;
 const CURRENT_SEASON_START_MS = Date.UTC(new Date().getUTCFullYear(), 0, 1);
 
 export type MatchFilters = {
@@ -130,34 +132,67 @@ export type FilteredMatchesPage = {
   hasMore: boolean;
 };
 
-async function riotFetch(url: string, useCache: boolean = true): Promise<any> {
+async function riotFetch(
+  url: string,
+  useCache: boolean = true,
+  maxRetries: number = 1,
+): Promise<any> {
   // Check cache first (skip for mutations)
   if (useCache) {
     const cached = getCached(apiCache, url);
     if (cached) return cached;
   }
 
-  // Rate limit check
-  await waitForRateLimit();
-  recordRequest();
+  let attempt = 0;
 
-  const res = await fetch(url, {
-    headers: {
-      "X-Riot-Token": API_KEY,
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Riot API error: ${res.status} ${res.statusText}`);
+  // Simple retry with backoff specifically for Riot 429 responses.
+  while (attempt <= maxRetries) {
+    // Rate limit check (our own conservative limiter)
+    await waitForRateLimit();
+    recordRequest();
+
+    const res = await fetch(url, {
+      headers: {
+        "X-Riot-Token": API_KEY,
+      },
+    });
+
+    if (res.status === 429) {
+      // Respect Riot's suggested retry window when available.
+      const retryAfterHeader = res.headers.get("Retry-After");
+      const retryAfterSeconds = retryAfterHeader
+        ? Number(retryAfterHeader)
+        : 2;
+
+      if (attempt < maxRetries) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.max(1000, retryAfterSeconds * 1000)),
+        );
+        attempt += 1;
+        continue;
+      }
+
+      throw new Error(
+        "Riot API rate limit exceeded. Please wait a bit and try again.",
+      );
+    }
+
+    if (!res.ok) {
+      throw new Error(`Riot API error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+
+    // Cache successful responses
+    if (useCache) {
+      setCached(apiCache, url, data);
+    }
+
+    return data;
   }
-  
-  const data = await res.json();
-  
-  // Cache successful responses
-  if (useCache) {
-    setCached(apiCache, url, data);
-  }
-  
-  return data;
+
+  // Should be unreachable, but keeps TypeScript happy.
+  throw new Error("Riot API request failed after retries.");
 }
 
 function normalizeChampionFilter(value?: string | null): string {
@@ -543,6 +578,12 @@ export async function getAllFilteredMatchesForSeason(
       hasMore = false;
     } else {
       cursor = page.nextOffset;
+    }
+
+    // Be gentle with Riot's rate limits when scanning many matches
+    // for background filters: add a small delay between pages.
+    if (hasMore && allMatches.length < maxMatches) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
 
