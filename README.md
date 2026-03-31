@@ -4,7 +4,7 @@ SoloQ Journal is a SvelteKit app for reviewing League match history and getting 
 
 ## Features
 
-- Multi-region summoner search (EUW, NA, KR, JP, BR, OCE, RU, TR, LAN, LAS, SA)
+- Multi-region summoner search (EUNE, EUW, NA, KR, JP, BR, OCE, RU, TR, LAN, LAS, SA)
 - Saved profiles sidebar with quick re-open and delete
 - Match history grouped by day with daily W/L badges
 - Champion filter for match history

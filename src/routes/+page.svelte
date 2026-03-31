@@ -36,6 +36,12 @@
       tagLineSuffix: "euw1",
     },
     {
+      value: "eun1",
+      label: "EUNE",
+      gameNameExample: "Wunder",
+      tagLineSuffix: "eun1",
+    },
+    {
       value: "na1",
       label: "NA",
       gameNameExample: "Doublelift",
@@ -191,6 +197,12 @@
   async function handleSearch() {
     loading = true;
     error = "";
+    searchedProfile = null;
+    allSeasonMatches = [];
+    nextOffset = 0;
+    hasMore = true;
+    selectedChampion = null;
+    selectedOpponentChampion = null;
     try {
       const trimmedGameName = gameName.trim();
       const normalizedTagLine = normalizeTagLineInput(tagLine);
@@ -1153,7 +1165,77 @@
       <p class="text-red-400 mb-4">{error}</p>
     {/if}
 
-    {#if currentProfile}
+    {#if loading}
+      <div class="mb-6 p-4 match-profile-card animate-pulse">
+        <div class="flex items-center gap-4">
+          <div class="h-14 w-14 rounded-full bg-gray-700/60"></div>
+          <div class="flex-1 space-y-2">
+            <div class="h-6 w-56 rounded bg-gray-700/60"></div>
+            <div class="h-4 w-28 rounded bg-gray-700/50"></div>
+            <div class="h-4 w-36 rounded bg-gray-700/40"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="match-days">
+        {#each Array(3) as _, dayIndex (`search-loader-day-${dayIndex}`)}
+          <section>
+            <div class="match-day-header animate-pulse">
+              <div class="h-4 w-20 rounded bg-gray-700/55"></div>
+              <div class="match-day-badges">
+                <div class="h-6 w-12 rounded-full bg-gray-700/45"></div>
+                <div class="h-6 w-12 rounded-full bg-gray-700/35"></div>
+              </div>
+            </div>
+
+            <div class="match-day-list">
+              {#each Array(2) as __, cardIndex (`search-loader-card-${dayIndex}-${cardIndex}`)}
+                <div class="match-card match-card--win animate-pulse" aria-hidden="true">
+                  <div class="match-card__left">
+                    <div class="match-card__pair">
+                      <div class="match-card__icon-column">
+                        <div class="match-card__champion-circle match-card__champion-circle--player bg-gray-700/60"></div>
+                      </div>
+                      <div class="match-card__icon-column">
+                        <div class="match-card__champion-circle match-card__champion-circle--jungler bg-gray-700/45"></div>
+                      </div>
+                    </div>
+
+                    <div class="match-card__spells">
+                      <div class="match-card__spell-icon bg-gray-700/50"></div>
+                      <div class="match-card__spell-icon bg-gray-700/35"></div>
+                    </div>
+
+                    <div class="match-card__body">
+                      <div class="match-card__title-row">
+                        <div class="h-4 w-24 rounded bg-gray-700/55"></div>
+                        <div class="h-3 w-44 rounded bg-gray-700/35"></div>
+                      </div>
+                      <div class="match-card__items">
+                        {#each Array(7) as ___, itemIndex (`search-loader-item-${dayIndex}-${cardIndex}-${itemIndex}`)}
+                          <div class="match-card__item-slot bg-gray-700/40"></div>
+                        {/each}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="match-card__center">
+                    <div class="h-6 w-20 rounded bg-gray-700/50"></div>
+                    <div class="h-4 w-16 rounded bg-gray-700/35 mt-2"></div>
+                  </div>
+
+                  <div class="match-card__right">
+                    <div class="h-5 w-14 rounded-full bg-gray-700/45"></div>
+                    <div class="h-4 w-20 rounded bg-gray-700/30"></div>
+                    <div class="h-4 w-16 rounded bg-gray-700/30"></div>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </section>
+        {/each}
+      </div>
+    {:else if currentProfile}
       <!-- Profile info -->
       <div class="mb-6 p-4 match-profile-card">
         <div class="flex items-center gap-4">
