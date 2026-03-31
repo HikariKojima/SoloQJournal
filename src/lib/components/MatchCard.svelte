@@ -181,7 +181,7 @@
     {/if}
 
     <div class="flex items-center gap-[1.1rem] max-md:w-full max-md:gap-2.5">
-      <div class="flex items-start gap-1 max-md:-space-x-1">
+      <div class="flex items-start gap-1 max-md:gap-0">
         <div class="flex flex-col items-center gap-1">
           <div
             class={`${championCircleBaseClass} h-12.5 w-12.5 max-md:h-10 max-md:w-10 ${allyRingClass}`}
@@ -218,7 +218,7 @@
         </div>
 
         {#if match.allyJungler?.champion}
-          <div class="flex flex-col items-center gap-1 max-md:mt-4">
+          <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
             <div
               class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${allyRingClass}`}
             >
@@ -349,7 +349,7 @@
 
     <div class="order-5 flex min-w-24.5 flex-col items-center gap-[0.35rem] max-md:min-w-0 max-md:items-start">
       <span class="text-[11px] uppercase leading-none tracking-[0.08em] text-slate-50">VS</span>
-      <div class="flex items-start gap-1.5 max-md:-space-x-1">
+      <div class="flex items-start gap-1.5 max-md:gap-0">
         {#if match.laneOpponent?.champion}
           <div class="flex flex-col items-center gap-1">
             <div
@@ -388,7 +388,7 @@
         {/if}
 
         {#if match.enemyJungler?.champion}
-          <div class="flex flex-col items-center gap-1 max-md:mt-4">
+          <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
             <div
               class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
             >

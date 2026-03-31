@@ -1292,22 +1292,22 @@
       </div>
     {:else if currentProfile}
       <!-- Profile info -->
-      <div class="mb-6 rounded-2xl bg-(--card-bg) p-4">
-        <div class="flex flex-col items-center gap-3 text-center">
+      <div class="mb-6 rounded-2xl bg-(--card-bg) p-4 max-sm:p-3">
+        <div class="flex flex-col items-center gap-2.5 text-center">
           {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
             <img
               src={profileIcon(currentProfile.summoner.profileIconId)}
               alt={`${currentProfile.summoner.name} profile icon`}
-              class="h-14 w-14 rounded-full border border-gray-600 object-cover"
+              class="h-14 w-14 rounded-full border border-gray-600 object-cover max-sm:h-12 max-sm:w-12"
               loading="lazy"
             />
           {/if}
 
           <div>
-            <h1 class="text-xl sm:text-2xl font-bold wrap-break-word">{currentProfile.summoner.name}</h1>
-            <p>Level: {currentProfile.summoner.level}</p>
+            <h1 class="text-xl font-bold wrap-break-word max-sm:text-lg sm:text-2xl">{currentProfile.summoner.name}</h1>
+            <p class="text-sm sm:text-base">Level: {currentProfile.summoner.level}</p>
             {#if winRate !== null}
-              <p>Win Rate: {winRate}%</p>
+              <p class="text-sm sm:text-base">Win Rate: {winRate}%</p>
             {/if}
           </div>
         </div>
