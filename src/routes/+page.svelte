@@ -23,6 +23,10 @@
   let tagLineError = $state("");
   let currentSearchGameName = $state("");
   let currentSearchTagLine = $state("");
+  
+  // All matches loaded for filter options (lazy loaded in background)
+  let allSeasonMatches = $state<MatchSummaryResponse[]>([]);
+  let isLoadingFilters = $state(false);
 
   const regionOptions = [
     {
@@ -149,6 +153,35 @@
     return `/api/summoner?${params.toString()}`;
   }
 
+  /**
+   * Load all matches for the season in the background to populate filters
+   * This happens silently after the initial search completes
+   */
+  async function loadAllMatchesForFilters() {
+    if (!currentSearchGameName || !currentSearchTagLine) return;
+    // Avoid duplicate background fetches for the same profile
+    if (isLoadingFilters || allSeasonMatches.length > 0) return;
+    
+    isLoadingFilters = true;
+    try {
+      const res = await fetch(
+        createSummonerApiUrl({
+          all: true,
+          limit: 300, // Fetch up to 300 matches for comprehensive filter options
+        }),
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const response = await res.json();
+      allSeasonMatches = response.matches || [];
+      debugLog(`Filters loaded: ${allSeasonMatches.length} matches fetched`);
+    } catch (err: any) {
+      console.error("Failed to load filters data:", err.message);
+      // Silent fail - filters will just show available loaded matches
+    } finally {
+      isLoadingFilters = false;
+    }
+  }
+
   async function handleSearch() {
     loading = true;
     error = "";
@@ -169,8 +202,15 @@
 
       // Strip the # from tagLine for the API request
       const cleanTagLine = normalizedTagLine.substring(1);
+      // Store the search parameters used for subsequent pagination/filter requests
+      currentSearchGameName = trimmedGameName;
+      currentSearchTagLine = cleanTagLine;
+
       const res = await fetch(
-        `/api/summoner?gameName=${encodeURIComponent(trimmedGameName)}&tagLine=${encodeURIComponent(cleanTagLine)}&platform=${encodeURIComponent(selectedRegion)}&limit=${String(PAGE_LIMIT)}`,
+        createSummonerApiUrl({
+          offset: 0,
+          limit: PAGE_LIMIT,
+        }),
       );
       if (!res.ok) throw new Error(await res.text());
       const fetchedProfile:
@@ -193,9 +233,6 @@
         lastFetched: new Date().toISOString(),
       });
 
-      // Store the search parameters for load more
-      currentSearchGameName = trimmedGameName;
-      currentSearchTagLine = cleanTagLine;
       // Clear the input fields after successful fetch
       gameName = "";
       tagLine = "";
@@ -204,6 +241,9 @@
       hasMore = fetchedProfile.hasMore ?? false;
       selectedChampion = null;
       selectedOpponentChampion = null;
+
+      // Background load all matches for comprehensive filter options (no await - fire and forget)
+      void loadAllMatchesForFilters();
     } catch (err: any) {
       error = err.message;
     } finally {
@@ -308,7 +348,9 @@
   let nextOffset = $state(0);
 
   const championFilterOptions = $derived.by(() => {
-    const matches = (currentProfile?.matches ?? []) as Array<any>;
+    // Use all season matches for comprehensive filters, fall back to visible matches
+    const matchesForFilter = allSeasonMatches.length > 0 ? allSeasonMatches : (currentProfile?.matches ?? []);
+    const matches = matchesForFilter as Array<any>;
     if (!matches.length) return [];
 
     const counts = new Map<string, number>();
@@ -320,15 +362,17 @@
 
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
-      .map(([champion, count]) => ({ champion, count }));
+      .map(([champion]) => ({ champion }));
   });
 
   function buildChampionFacet(
     selector: (match: MatchSummaryResponse) => string | undefined,
   ) {
-    const matches = (currentProfile?.matches ?? []) as MatchSummaryResponse[];
+    // Use all season matches for comprehensive filters, fall back to visible matches
+    const matchesForFilter = allSeasonMatches.length > 0 ? allSeasonMatches : (currentProfile?.matches ?? []);
+    const matches = matchesForFilter as MatchSummaryResponse[];
     if (!matches.length)
-      return [] as Array<{ champion: string; count: number }>;
+      return [] as Array<{ champion: string }>;
 
     const counts = new Map<string, number>();
     for (const match of matches) {
@@ -339,7 +383,7 @@
 
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
-      .map(([champion, count]) => ({ champion, count }));
+      .map(([champion]) => ({ champion }));
   }
 
   const opponentChampionOptions = $derived.by(() =>
@@ -473,6 +517,12 @@
   const currentProfileKey = $derived.by(() => {
     if (!currentProfile) return "";
     return `${currentProfile.summoner.puuid}`;
+  });
+
+  // Reset full-season filter cache whenever the active profile changes
+  $effect(() => {
+    allSeasonMatches = [];
+    isLoadingFilters = false;
   });
 
   const tiltState = $derived.by(() => {
@@ -1180,8 +1230,6 @@
                       />
                       <span>{option.champion}</span>
                     </div>
-                    <span class="match-filter-option-count">{option.count}</span
-                    >
                   </button>
                 {/each}
               </div>
@@ -1245,8 +1293,6 @@
                       />
                       <span>{option.champion}</span>
                     </div>
-                    <span class="match-filter-option-count">{option.count}</span
-                    >
                   </button>
                 {/each}
               </div>

@@ -22,23 +22,34 @@ import {
 
 const DEFAULT_PAGE_LIMIT = 12;
 const MAX_PAGE_LIMIT = 20;
+// Upper bound for how many matches can be returned when requesting the
+// current season in one shot (all=true). Kept separate from per-page limit
+// so background filter enrichment can look at a larger sample without
+// affecting infinite scroll behavior.
+const MAX_SEASON_MATCHES = 400;
 
 export async function GET({ url }: RequestEvent) {
   const gameName = url.searchParams.get("gameName");
   const tagLine = url.searchParams.get("tagLine");
   const platform = url.searchParams.get("platform") ?? "euw1";
-  const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const offsetRaw = parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const limitRaw = parseInt(url.searchParams.get("limit") ?? "", 10);
   const all = (url.searchParams.get("all") ?? "").toLowerCase() === "true";
-  
+
   // Keep page responses compact for snappier infinite scroll while preserving
   // a hard upper bound for manual query overrides.
-  const allLimit = Math.min(
-    Math.max(
-      parseInt(url.searchParams.get("limit") ?? String(DEFAULT_PAGE_LIMIT), 10) ||
-        DEFAULT_PAGE_LIMIT,
-      5,
-    ),
-    MAX_PAGE_LIMIT,
+  const pageLimitBase = Number.isNaN(limitRaw) ? DEFAULT_PAGE_LIMIT : limitRaw;
+  const pageLimit = Math.min(Math.max(pageLimitBase, 5), MAX_PAGE_LIMIT);
+
+  // When requesting the full season window (all=true), allow a higher cap so
+  // background filter enrichment can see a larger sample, while still
+  // enforcing a hard safety ceiling.
+  const requestedSeasonLimit = Number.isNaN(limitRaw)
+    ? MAX_SEASON_MATCHES
+    : limitRaw;
+  const seasonLimit = Math.min(
+    Math.max(requestedSeasonLimit, 10),
+    MAX_SEASON_MATCHES,
   );
   const champion = url.searchParams.get("champion") ?? undefined;
   const opponentChampion =
@@ -63,11 +74,15 @@ export async function GET({ url }: RequestEvent) {
         region,
         account.puuid,
         filters,
-        allLimit,
+        seasonLimit,
       );
-      const hasMore = matches.length >= allLimit;
+      const hasMore = matches.length >= seasonLimit;
 
-      if (offset === 0) {
+      // Note: offset is intentionally ignored for all=true. This endpoint
+      // returns up to seasonLimit matches for the current season in one shot,
+      // with hasMore indicating whether the cap was reached.
+
+      if (offsetRaw === 0) {
         const summoner = await getSummonerByPuuid(region, account.puuid);
         return json({
           summoner,
@@ -83,12 +98,12 @@ export async function GET({ url }: RequestEvent) {
     const page = await getFilteredMatchPage(
       region,
       account.puuid,
-      Number.isNaN(offset) ? 0 : offset,
-      allLimit,  // Use the limited value (max 20)
+      Number.isNaN(offsetRaw) ? 0 : offsetRaw,
+      pageLimit, // Use the limited value (max 20) for paging
       filters,
     );
 
-    if (offset === 0) {
+    if (offsetRaw === 0) {
       const summoner = await getSummonerByPuuid(region, account.puuid);
       return json({
         summoner,
