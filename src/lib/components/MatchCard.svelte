@@ -41,10 +41,9 @@
 
   const kdaRatio = $derived.by(() => match.kda.ratio);
 
-  const kdaQualityClass = $derived.by(() => {
-    if (kdaRatio == null) return "match-kda--average";
-    if (kdaRatio >= 3) return "match-kda--good";
-    return "match-kda--average";
+  const hasGoodKda = $derived.by(() => {
+    if (kdaRatio == null) return false;
+    return kdaRatio >= 3;
   });
 
   const kdaDisplay = $derived.by(() => {
@@ -71,16 +70,37 @@
     return "Ranked Solo/Duo";
   });
 
+  const cardBaseClass =
+    "relative flex items-center justify-between gap-8 rounded-[14px] border-l-[3px] border-tl-none border-bl-none bg-(--card-bg) px-[1.9rem] py-[1.35rem] pl-[1.65rem] shadow-[0_20px_40px_rgba(0,0,0,0.7)] transition-[background-color,transform,box-shadow] duration-150 ease-in hover:bg-(--card-bg-hover) hover:-translate-y-px hover:shadow-[0_24px_60px_rgba(0,0,0,0.9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7c3aed] max-md:flex-wrap max-md:items-start max-md:gap-3 max-md:px-3.5 max-md:py-3 max-md:pl-3.5";
+
+  const resultPillBaseClass =
+    "inline-flex items-center justify-center rounded-full px-[0.55rem] py-[0.1rem] text-[0.72rem] font-semibold uppercase tracking-[0.12em]";
+
+  const championCircleBaseClass =
+    "relative box-border aspect-square overflow-hidden rounded-full bg-[#1e2538]";
+
+  const championImageClass =
+    "h-full w-full rounded-full object-cover object-center block";
+
+  const roleIconClass =
+    "h-3.5 w-3.5 object-contain filter-[brightness(0)_invert(1)]";
+
+  const playerFallbackClass =
+    "absolute inset-0 flex items-center justify-center rounded-full bg-[#1e2538] text-[0.7rem] font-semibold text-(--text-primary)";
+
+  const junglerFallbackClass =
+    "absolute inset-0 flex items-center justify-center rounded-full bg-[#1e2538] text-[0.58rem] font-semibold text-(--text-primary)";
+
   const cardAccentClass = $derived.by(() =>
     match.result === "win"
-      ? "match-card match-card--win"
-      : "match-card match-card--loss",
+      ? `${cardBaseClass} border-l-[#7c3aed]`
+      : `${cardBaseClass} border-l-[#be185d]`,
   );
 
   const resultPillClass = $derived.by(() =>
     match.result === "win"
-      ? "match-pill match-pill--win"
-      : "match-pill match-pill--loss",
+      ? `${resultPillBaseClass} bg-[var(--badge-win-bg)] text-[var(--badge-win-text)]`
+      : `${resultPillBaseClass} bg-[var(--badge-loss-bg)] text-[var(--badge-loss-text)]`,
   );
 
   const itemSlots = $derived.by(() => {
@@ -126,24 +146,24 @@
 
   const allyRingClass = $derived.by(() =>
     match.result === "win"
-      ? "match-card__champion-circle--win"
-      : "match-card__champion-circle--loss",
+      ? "shadow-[0_0_0_2px_#7c3aed]"
+      : "shadow-[0_0_0_2px_#be185d]",
   );
 
   const enemyRingClass = $derived.by(() =>
     match.result === "win"
-      ? "match-card__champion-circle--loss"
-      : "match-card__champion-circle--win",
+      ? "shadow-[0_0_0_2px_#be185d]"
+      : "shadow-[0_0_0_2px_#7c3aed]",
   );
 </script>
 
 <div
   role="button"
   tabindex="0"
-  class="match-card-wrapper cursor-pointer"
+  class="flex flex-col gap-2 cursor-pointer"
   onclick={(event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
-    if (target && target.closest(".match-card__coach-panel")) {
+    if (target && target.closest("[data-coach-panel]")) {
       return;
     }
     onMatchSelect?.(match);
@@ -157,19 +177,17 @@
 >
   <div class={cardAccentClass}>
     {#if hasReflection}
-      <div class="match-card__reflection-chip">Reflection saved</div>
+      <div class="absolute right-[1.1rem] top-[0.55rem] rounded-full bg-[rgba(22,163,74,0.18)] px-[0.6rem] py-[0.2rem] text-[0.7rem] font-medium text-[#bbf7d0]">Reflection saved</div>
     {/if}
 
-    <div class="match-card__left">
-      <div class="match-card__pair match-card__pair--ally">
-        <div class="match-card__icon-column">
+    <div class="flex items-center gap-[1.1rem] max-md:w-full max-md:gap-2.5">
+      <div class="flex items-start gap-1 max-md:-space-x-1">
+        <div class="flex flex-col items-center gap-1">
           <div
-            class={`match-card__champion-circle match-card__champion-circle--player ${allyRingClass}`}
+            class={`${championCircleBaseClass} h-12.5 w-12.5 max-md:h-10 max-md:w-10 ${allyRingClass}`}
           >
             {#if playerIconFailed}
-              <div
-                class="match-card__champion-fallback match-card__champion-fallback--player"
-              >
+              <div class={playerFallbackClass}>
                 {match.champion.slice(0, 2).toUpperCase()}
               </div>
             {:else}
@@ -179,6 +197,7 @@
                 width="44"
                 height="44"
                 loading="lazy"
+                class={championImageClass}
                 onerror={() => {
                   playerIconFailed = true;
                 }}
@@ -192,21 +211,19 @@
               alt="Player role"
               width="14"
               height="14"
-              class="match-card__role-icon"
+              class={roleIconClass}
               loading="lazy"
             />
           {/if}
         </div>
 
         {#if match.allyJungler?.champion}
-          <div class="match-card__icon-column">
+          <div class="flex flex-col items-center gap-1 max-md:mt-4">
             <div
-              class={`match-card__champion-circle match-card__champion-circle--jungler ${allyRingClass}`}
+              class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${allyRingClass}`}
             >
               {#if allyJunglerIconFailed}
-                <div
-                  class="match-card__champion-fallback match-card__champion-fallback--jungler"
-                >
+                <div class={junglerFallbackClass}>
                   {match.allyJungler.champion.slice(0, 2).toUpperCase()}
                 </div>
               {:else}
@@ -216,6 +233,7 @@
                   width="32"
                   height="32"
                   loading="lazy"
+                  class={championImageClass}
                   onerror={() => {
                     allyJunglerIconFailed = true;
                   }}
@@ -229,7 +247,7 @@
                 alt="Allied jungler role"
                 width="14"
                 height="14"
-                class="match-card__role-icon"
+                class={roleIconClass}
                 loading="lazy"
               />
             {/if}
@@ -238,14 +256,14 @@
       </div>
 
       {#if match.summonerSpells}
-        <div class="match-card__spells">
+        <div class="flex flex-col gap-[0.3rem] max-md:gap-1">
           {#if match.summonerSpells.primary}
             <img
               src={summonerSpellIcon(match.summonerSpells.primary)}
               alt="Primary summoner spell"
               width="20"
               height="20"
-              class="match-card__spell-icon"
+              class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-[#050816] object-cover max-md:h-4.5 max-md:w-4.5"
               loading="lazy"
             />
           {/if}
@@ -255,27 +273,27 @@
               alt="Secondary summoner spell"
               width="20"
               height="20"
-              class="match-card__spell-icon"
+              class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-[#050816] object-cover max-md:h-4.5 max-md:w-4.5"
               loading="lazy"
             />
           {/if}
         </div>
       {/if}
 
-      <div class="match-card__body">
-        <div class="match-card__title-row">
-          <span class="match-card__champ-name">{match.champion}</span>
-          <div class="match-card__meta">
+      <div class="flex flex-col gap-[0.52rem]">
+        <div class="flex flex-col gap-[0.32rem]">
+          <span class="text-[0.9rem] font-semibold text-(--text-primary)">{match.champion}</span>
+          <div class="flex items-center gap-[0.4rem] text-[0.78rem] text-(--text-muted)">
             <span>{queueLabel}</span>
-            <span class="match-card__dot"></span>
+            <span class="h-0.75 w-0.75 rounded-full bg-(--text-muted)"></span>
             <span>{formattedDuration}</span>
             <span class={resultPillClass}>{match.result.toUpperCase()}</span>
           </div>
         </div>
 
-        <div class="match-card__items">
+        <div class="mt-[0.4rem] flex items-center gap-[0.38rem]">
           {#each itemSlots as itemId, index (index)}
-            <div class="match-card__item-slot">
+            <div class="h-6.5 w-6.5 overflow-hidden rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-[#050816]">
               {#if itemId}
                 <img
                   src={itemIcon(itemId)}
@@ -283,6 +301,7 @@
                   width="26"
                   height="26"
                   loading="lazy"
+                  class="h-full w-full object-cover block"
                 />
               {/if}
             </div>
@@ -291,55 +310,53 @@
       </div>
     </div>
 
-    <div class="match-card__center">
-      <div class="match-card__kda-line">
+      <div class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start">
+      <div class="text-[1.05rem] font-semibold">
         {match.kda.kills} / {match.kda.deaths} / {match.kda.assists}
       </div>
       {#if kdaDisplay}
-        <div class={`match-card__kda-ratio ${kdaQualityClass}`}>
+        <div class={`mt-[0.2rem] text-[0.84rem] font-medium ${hasGoodKda ? "text-(--kda-good)" : "text-(--kda-avg)"}`}>
           {kdaDisplay}
         </div>
       {/if}
     </div>
 
-    <div class="match-card__right">
+    <div class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3">
       <div>
-        <p class="match-card__stat-label">CS/m</p>
-        <p class="match-card__stat-value">{csPerMin.toFixed(1)}</p>
+        <p class="text-[0.74rem] text-(--text-muted)">CS/m</p>
+        <p class="text-[0.94rem] font-semibold">{csPerMin.toFixed(1)}</p>
       </div>
       <div>
-        <p class="match-card__stat-label">KP</p>
-        <p class="match-card__stat-value">{kpDisplay}</p>
+        <p class="text-[0.74rem] text-(--text-muted)">KP</p>
+        <p class="text-[0.94rem] font-semibold">{kpDisplay}</p>
       </div>
 
       <button
         type="button"
-        class="match-card__coach-btn"
+        class="mt-[0.45rem] inline-flex items-center gap-[0.45rem] rounded-full border border-[rgba(167,139,250,0.65)] bg-[radial-gradient(circle_at_top_left,rgba(129,140,248,0.26),rgba(15,23,42,0.98))] px-4 py-2 text-[0.8rem] font-semibold text-(--text-primary) shadow-[0_8px_24px_rgba(46,16,101,0.35)] transition-[background-color,border-color,transform,box-shadow] duration-150 ease-in hover:-translate-y-px hover:border-[rgba(196,181,253,0.9)] hover:shadow-[0_12px_28px_rgba(76,29,149,0.42)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(196,181,253,0.95)]"
         onclick={(event) => {
           event.stopPropagation();
           showCoaching = !showCoaching;
         }}
       >
-        <Sparkles class="match-card__coach-btn-icon" />
+        <Sparkles class="h-4 w-4" />
         <span>Get Coaching</span>
         <ChevronDown
-          class={`match-card__coach-btn-icon transition-transform ${showCoaching ? "rotate-180" : ""}`}
+          class={`h-4 w-4 transition-transform ${showCoaching ? "rotate-180" : ""}`}
         />
       </button>
     </div>
 
-    <div class="match-card__enemy-side">
-      <span class="match-card__enemy-vs">VS</span>
-      <div class="match-card__pair match-card__pair--enemy">
+    <div class="order-5 flex min-w-24.5 flex-col items-center gap-[0.35rem] max-md:min-w-0 max-md:items-start">
+      <span class="text-[11px] uppercase leading-none tracking-[0.08em] text-slate-50">VS</span>
+      <div class="flex items-start gap-1.5 max-md:-space-x-1">
         {#if match.laneOpponent?.champion}
-          <div class="match-card__icon-column">
+          <div class="flex flex-col items-center gap-1">
             <div
-              class={`match-card__champion-circle match-card__champion-circle--enemy ${enemyRingClass}`}
+              class={`${championCircleBaseClass} h-12.5 w-12.5 max-md:h-10 max-md:w-10 ${enemyRingClass}`}
             >
               {#if enemyIconFailed}
-                <div
-                  class="match-card__champion-fallback match-card__champion-fallback--player"
-                >
+                <div class={playerFallbackClass}>
                   {match.laneOpponent.champion.slice(0, 2).toUpperCase()}
                 </div>
               {:else}
@@ -349,6 +366,7 @@
                   width="44"
                   height="44"
                   loading="lazy"
+                  class={championImageClass}
                   onerror={() => {
                     enemyIconFailed = true;
                   }}
@@ -362,7 +380,7 @@
                 alt="Enemy role"
                 width="14"
                 height="14"
-                class="match-card__role-icon"
+                class={roleIconClass}
                 loading="lazy"
               />
             {/if}
@@ -370,14 +388,12 @@
         {/if}
 
         {#if match.enemyJungler?.champion}
-          <div class="match-card__icon-column">
+          <div class="flex flex-col items-center gap-1 max-md:mt-4">
             <div
-              class={`match-card__champion-circle match-card__champion-circle--jungler ${enemyRingClass}`}
+              class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
             >
               {#if enemyJunglerIconFailed}
-                <div
-                  class="match-card__champion-fallback match-card__champion-fallback--jungler"
-                >
+                <div class={junglerFallbackClass}>
                   {match.enemyJungler.champion.slice(0, 2).toUpperCase()}
                 </div>
               {:else}
@@ -387,6 +403,7 @@
                   width="32"
                   height="32"
                   loading="lazy"
+                  class={championImageClass}
                   onerror={() => {
                     enemyJunglerIconFailed = true;
                   }}
@@ -400,7 +417,7 @@
                 alt="Enemy jungler role"
                 width="14"
                 height="14"
-                class="match-card__role-icon"
+                class={roleIconClass}
                 loading="lazy"
               />
             {/if}
@@ -413,7 +430,8 @@
   {#if showCoaching}
     <div
       aria-live="polite"
-      class="match-card__coach-panel"
+      data-coach-panel="true"
+      class="rounded-xl border border-[rgba(15,23,42,0.9)] bg-[#020617] px-[1.05rem] py-[0.9rem]"
       transition:slide={{ duration: 150 }}
     >
       <CoachingPanel {match} {history} {playerPuuid} {leagueEntry} />

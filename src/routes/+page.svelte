@@ -1082,7 +1082,7 @@
   on:keydown={handleGlobalKeydown}
 />
 
-<div class="min-h-screen match-page lg:flex">
+<div class="min-h-screen bg-(--page-bg) text-(--text-primary) lg:flex">
   {#if isMobileProfilesOpen}
     <button
       type="button"
@@ -1094,7 +1094,7 @@
 
   <!-- Sidebar -->
   <aside
-    class={`match-sidebar fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
+    class={`fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto border-r border-slate-900/80 bg-[#111322] p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
     aria-label="Saved profiles"
   >
     <div class="mb-3 flex items-center justify-between lg:mb-4">
@@ -1221,7 +1221,7 @@
     {/if}
 
     {#if loading}
-      <div class="mb-6 p-4 match-profile-card animate-pulse">
+      <div class="mb-6 rounded-2xl bg-(--card-bg) p-4 animate-pulse">
         <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div class="h-14 w-14 rounded-full bg-gray-700/60"></div>
           <div class="flex-1 space-y-2">
@@ -1232,54 +1232,54 @@
         </div>
       </div>
 
-      <div class="match-days">
+      <div class="flex flex-col gap-7 max-md:gap-4">
         {#each Array(3) as _, dayIndex (`search-loader-day-${dayIndex}`)}
           <section>
-            <div class="match-day-header animate-pulse">
+            <div class="mb-2 flex items-center justify-between animate-pulse max-md:flex-wrap max-md:items-start max-md:gap-2">
               <div class="h-4 w-20 rounded bg-gray-700/55"></div>
-              <div class="match-day-badges">
+              <div class="flex items-center gap-[0.4rem]">
                 <div class="h-6 w-12 rounded-full bg-gray-700/45"></div>
                 <div class="h-6 w-12 rounded-full bg-gray-700/35"></div>
               </div>
             </div>
 
-            <div class="match-day-list">
+            <div class="flex flex-col gap-3">
               {#each Array(2) as __, cardIndex (`search-loader-card-${dayIndex}-${cardIndex}`)}
-                <div class="match-card match-card--win animate-pulse" aria-hidden="true">
-                  <div class="match-card__left">
-                    <div class="match-card__pair">
-                      <div class="match-card__icon-column">
-                        <div class="match-card__champion-circle match-card__champion-circle--player bg-gray-700/60"></div>
+                <div class="relative flex items-center justify-between gap-8 rounded-[14px] border-l-[3px] border-l-[#7c3aed] border-tl-none border-bl-none bg-(--card-bg) px-[1.9rem] py-[1.35rem] pl-[1.65rem] shadow-[0_20px_40px_rgba(0,0,0,0.7)] animate-pulse max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-3 max-md:py-3 max-md:rounded-[14px]" aria-hidden="true">
+                  <div class="flex items-center gap-[1.1rem] max-md:flex-wrap max-md:items-start max-md:gap-3">
+                    <div class="flex items-start gap-1">
+                      <div class="flex flex-col items-center gap-1">
+                        <div class="aspect-square h-12.5 w-12.5 rounded-full bg-gray-700/60"></div>
                       </div>
-                      <div class="match-card__icon-column">
-                        <div class="match-card__champion-circle match-card__champion-circle--jungler bg-gray-700/45"></div>
+                      <div class="flex flex-col items-center gap-1">
+                        <div class="aspect-square h-9.5 w-9.5 rounded-full bg-gray-700/45"></div>
                       </div>
                     </div>
 
-                    <div class="match-card__spells">
-                      <div class="match-card__spell-icon bg-gray-700/50"></div>
-                      <div class="match-card__spell-icon bg-gray-700/35"></div>
+                    <div class="flex flex-col gap-[0.3rem]">
+                      <div class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/50"></div>
+                      <div class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/35"></div>
                     </div>
 
-                    <div class="match-card__body">
-                      <div class="match-card__title-row">
+                    <div class="flex min-w-0 flex-1 flex-col gap-[0.52rem]">
+                      <div class="flex flex-col gap-[0.32rem]">
                         <div class="h-4 w-24 rounded bg-gray-700/55"></div>
                         <div class="h-3 w-44 rounded bg-gray-700/35"></div>
                       </div>
-                      <div class="match-card__items">
+                      <div class="mt-[0.4rem] flex flex-wrap items-center gap-[0.38rem]">
                         {#each Array(7) as ___, itemIndex (`search-loader-item-${dayIndex}-${cardIndex}-${itemIndex}`)}
-                          <div class="match-card__item-slot bg-gray-700/40"></div>
+                          <div class="h-6.5 w-6.5 rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-gray-700/40"></div>
                         {/each}
                       </div>
                     </div>
                   </div>
 
-                  <div class="match-card__center">
+                  <div class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start">
                     <div class="h-6 w-20 rounded bg-gray-700/50"></div>
                     <div class="h-4 w-16 rounded bg-gray-700/35 mt-2"></div>
                   </div>
 
-                  <div class="match-card__right">
+                  <div class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3">
                     <div class="h-5 w-14 rounded-full bg-gray-700/45"></div>
                     <div class="h-4 w-20 rounded bg-gray-700/30"></div>
                     <div class="h-4 w-16 rounded bg-gray-700/30"></div>
@@ -1292,8 +1292,8 @@
       </div>
     {:else if currentProfile}
       <!-- Profile info -->
-      <div class="mb-6 p-4 match-profile-card">
-        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+      <div class="mb-6 rounded-2xl bg-(--card-bg) p-4">
+        <div class="flex flex-col items-center gap-3 text-center">
           {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
             <img
               src={profileIcon(currentProfile.summoner.profileIconId)}
@@ -1303,8 +1303,8 @@
             />
           {/if}
 
-          <div class="text-center sm:text-left">
-            <h1 class="text-xl sm:text-2xl font-bold wrap-break-words">{currentProfile.summoner.name}</h1>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-bold wrap-break-word">{currentProfile.summoner.name}</h1>
             <p>Level: {currentProfile.summoner.level}</p>
             {#if winRate !== null}
               <p>Win Rate: {winRate}%</p>
@@ -1314,9 +1314,9 @@
       </div>
 
       {#if tiltState.isTilting && !dismissed}
-        <div class="mb-4 match-tilt-banner p-3 rounded">
+        <div class="mb-4 rounded border-l-[3px] border-l-(--accent-loss) bg-[#181321] p-3">
           <div class="flex items-center justify-between gap-3">
-            <p class="text-base match-tilt-banner-text">
+            <p class="text-base text-[#fed7e2]">
               {tiltState.streakLength}-game losing streak. Consider taking a
               break.
             </p>
@@ -1335,24 +1335,24 @@
       {/if}
 
       <!-- Filters -->
-      <div class="match-filter-bar">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch max-md:gap-[0.85rem]">
         <div>
-          <p class="match-filter-label">Match history</p>
-          <p class="match-filter-help">
+          <p class="text-[0.72rem] uppercase tracking-[0.16em] text-slate-50">Match history</p>
+          <p class="mt-1 text-[0.8rem] text-slate-50">
             Filter games by champion and matchup (current season Solo/Duo only)
           </p>
         </div>
         <div class="flex w-full flex-col sm:flex-row sm:flex-wrap gap-3">
           <div
-            class="match-filter-dropdown"
+            class="relative w-full"
             bind:this={championFilterDropdownEl}
           >
             <button
               type="button"
-              class="match-filter-trigger"
+              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-[rgba(148,163,184,0.6)] bg-[rgba(15,23,42,0.95)] px-[0.9rem] py-[0.4rem] text-[0.82rem] text-(--text-primary)"
               onclick={toggleChampionFilter}
             >
-              <div class="match-filter-trigger-main">
+              <div class="inline-flex items-center gap-2">
                 {#if selectedChampion}
                   <img
                     src={championIcon(selectedChampion.replaceAll(" ", ""))}
@@ -1360,24 +1360,25 @@
                     width="24"
                     height="24"
                     loading="lazy"
+                    class="h-6 w-6 rounded-full border border-[rgba(148,163,184,0.7)]"
                   />
                   <span>{selectedChampion}</span>
                 {:else}
                   <span>All champions</span>
                 {/if}
               </div>
-              <ChevronDown class="match-filter-trigger-chevron" />
+              <ChevronDown class="h-4 w-4 text-(--text-muted)" />
             </button>
 
             {#if isChampionFilterOpen}
-              <div class="match-filter-menu">
+              <div class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]">
                 <button
                   type="button"
-                  class={`match-filter-option ${selectedChampion ? "" : "match-filter-option--active"}`}
+                  class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
                   onclick={() => selectChampion(null)}
                 >
-                  <div class="match-filter-option-main">
-                    <span class="match-filter-option-pill">All</span>
+                  <div class="inline-flex items-center gap-2">
+                    <span class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)">All</span>
                     <span>All champions</span>
                   </div>
                 </button>
@@ -1385,16 +1386,17 @@
                 {#each championFilterOptions as option (option.champion)}
                   <button
                     type="button"
-                    class={`match-filter-option ${selectedChampion === option.champion ? "match-filter-option--active" : ""}`}
+                    class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedChampion === option.champion ? "bg-[rgba(79,70,229,0.25)]" : ""}`}
                     onclick={() => selectChampion(option.champion)}
                   >
-                    <div class="match-filter-option-main">
+                    <div class="inline-flex items-center gap-2">
                       <img
                         src={championIcon(option.champion.replaceAll(" ", ""))}
                         alt={option.champion}
                         width="24"
                         height="24"
                         loading="lazy"
+                        class="h-5.5 w-5.5 rounded-full"
                       />
                       <span>{option.champion}</span>
                     </div>
@@ -1405,15 +1407,15 @@
           </div>
 
           <div
-            class="match-filter-dropdown"
+            class="relative w-full"
             bind:this={opponentFilterDropdownEl}
           >
             <button
               type="button"
-              class="match-filter-trigger"
+              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-[rgba(148,163,184,0.6)] bg-[rgba(15,23,42,0.95)] px-[0.9rem] py-[0.4rem] text-[0.82rem] text-(--text-primary)"
               onclick={toggleOpponentFilter}
             >
-              <div class="match-filter-trigger-main">
+              <div class="inline-flex items-center gap-2">
                 {#if selectedOpponentChampion}
                   <img
                     src={championIcon(
@@ -1423,24 +1425,25 @@
                     width="24"
                     height="24"
                     loading="lazy"
+                    class="h-6 w-6 rounded-full border border-[rgba(148,163,184,0.7)]"
                   />
                   <span>{selectedOpponentChampion}</span>
                 {:else}
                   <span>Any lane opponent</span>
                 {/if}
               </div>
-              <ChevronDown class="match-filter-trigger-chevron" />
+              <ChevronDown class="h-4 w-4 text-(--text-muted)" />
             </button>
 
             {#if isOpponentFilterOpen}
-              <div class="match-filter-menu">
+              <div class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]">
                 <button
                   type="button"
-                  class={`match-filter-option ${selectedOpponentChampion ? "" : "match-filter-option--active"}`}
+                  class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedOpponentChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
                   onclick={() => selectOpponentChampion(null)}
                 >
-                  <div class="match-filter-option-main">
-                    <span class="match-filter-option-pill">Any</span>
+                  <div class="inline-flex items-center gap-2">
+                    <span class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)">Any</span>
                     <span>Any lane opponent</span>
                   </div>
                 </button>
@@ -1448,16 +1451,17 @@
                 {#each opponentChampionOptions as option (option.champion)}
                   <button
                     type="button"
-                    class={`match-filter-option ${selectedOpponentChampion === option.champion ? "match-filter-option--active" : ""}`}
+                    class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedOpponentChampion === option.champion ? "bg-[rgba(79,70,229,0.25)]" : ""}`}
                     onclick={() => selectOpponentChampion(option.champion)}
                   >
-                    <div class="match-filter-option-main">
+                    <div class="inline-flex items-center gap-2">
                       <img
                         src={championIcon(option.champion.replaceAll(" ", ""))}
                         alt={option.champion}
                         width="24"
                         height="24"
                         loading="lazy"
+                        class="h-5.5 w-5.5 rounded-full"
                       />
                       <span>{option.champion}</span>
                     </div>
@@ -1470,22 +1474,22 @@
       </div>
 
       <!-- Matches -->
-      <div class="match-days">
+      <div class="flex flex-col gap-7 max-md:gap-4">
         {#each filteredMatchDays as day (day.dateKey)}
           <section>
-            <div class="match-day-header">
-              <span class="match-day-date">{day.dateLabel}</span>
-              <div class="match-day-badges">
-                <span class="match-day-badge match-day-badge--wins">
+            <div class="mb-2 flex items-center justify-between max-md:flex-wrap max-md:items-start max-md:gap-2">
+              <span class="text-xs uppercase tracking-[0.16em] text-(--text-muted)">{day.dateLabel}</span>
+              <div class="flex items-center gap-[0.4rem]">
+                <span class="inline-flex items-center justify-center rounded-full bg-(--badge-win-bg) px-[0.6rem] py-[0.15rem] text-[0.7rem] font-semibold text-(--badge-win-text)">
                   {day.wins}W
                 </span>
-                <span class="match-day-badge match-day-badge--losses">
+                <span class="inline-flex items-center justify-center rounded-full bg-(--badge-loss-bg) px-[0.6rem] py-[0.15rem] text-[0.7rem] font-semibold text-(--badge-loss-text)">
                   {day.losses}L
                 </span>
               </div>
             </div>
 
-            <div class="match-day-list">
+            <div class="flex flex-col gap-3">
               {#each day.matches as match (match.matchId)}
                 <MatchCard
                   {match}
@@ -1592,7 +1596,7 @@
             class="journal-modal relative w-[min(96vw,750px)] bg-gray-900 border border-gray-700 rounded p-4 sm:p-6 shadow-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto text-sm sm:text-base leading-relaxed"
           >
             <!-- Header with result color coding -->
-            <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div class="relative mb-4 pr-10">
               <div>
                 <h2 class="text-xl font-bold mb-1">
                   Journal
@@ -1611,7 +1615,8 @@
               </div>
               <button
                 onclick={closeReflection}
-                class="text-gray-400 hover:text-gray-200 text-xl font-bold"
+                class="absolute right-0 top-0 inline-flex h-8 w-8 items-center justify-center text-2xl leading-none text-gray-400 hover:text-gray-200"
+                aria-label="Close journal modal"
               >
                 ×
               </button>
@@ -1620,8 +1625,7 @@
             <!-- Tilt Break Alert -->
             {#if tiltState.isTilting && emotionalState === "😤 Tilted" && !tiltAlertDismissed}
               <div
-                class="mb-4 p-3 rounded-lg border border-pink-600 bg-black/30"
-                style="background-color: rgba(190,24,93,0.12); border: 1px solid #be185d;"
+                class="mb-4 rounded-lg border border-pink-700/90 bg-[rgba(190,24,93,0.12)] p-3"
               >
                 <div class="flex justify-between items-start">
                   <div class="flex gap-2">
@@ -1767,8 +1771,7 @@
                 <button
                   id="learning-objective"
                   type="button"
-                  class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-gray-300 text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 flex items-center justify-between select-none"
-                  style="background-color: #131620; border: 1px solid #252b3d; color: #e5e7eb;"
+                  class="w-full px-3 py-2 rounded text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 flex items-center justify-between select-none bg-[#131620] border border-[#252b3d] text-[#e5e7eb]"
                   onclick={toggleLearningObjectiveDropdown}
                 >
                   <span class={selectedObjective ? "" : "text-gray-400"}
@@ -1784,8 +1787,7 @@
 
                 {#if isLearningObjectiveOpen}
                   <div
-                    class="absolute left-0 right-0 mt-1 z-20 rounded border border-gray-700 bg-gray-900 shadow-lg"
-                    style="background-color: #131620; border: 1px solid #252b3d;"
+                    class="absolute left-0 right-0 mt-1 z-20 rounded border border-[#252b3d] bg-[#131620] shadow-lg"
                   >
                     <button
                       type="button"
@@ -1844,8 +1846,7 @@
 
                 {#if isAddingObjective}
                   <div
-                    class="mt-1 rounded border border-gray-700 bg-gray-900 shadow-lg"
-                    style="background-color: #131620; border: 1px solid #252b3d;"
+                    class="mt-1 rounded border border-[#252b3d] bg-[#131620] shadow-lg"
                   >
                     <div class="p-2 flex gap-2">
                       <input
@@ -1854,8 +1855,7 @@
                         bind:value={learningObjectiveInput}
                         onkeydown={handleLearningObjectiveInputKeydown}
                         placeholder="Enter new objective..."
-                        class="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500"
-                        style="background-color: #0c0e14; border: 1px solid #252b3d;"
+                        class="flex-1 px-3 py-2 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
                       />
                       <button
                         type="button"
@@ -1895,8 +1895,7 @@
                     "objectiveExecution",
                     objectiveExecution,
                   )}
-                class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
-                style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
                 placeholder="Your thoughts..."
               ></textarea>
             </div>
@@ -1947,8 +1946,7 @@
                   id="went-well"
                   bind:value={wentWell}
                   onblur={() => autoSaveReflectionField("wentWell", wentWell)}
-                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
-                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
                   placeholder="Your thoughts..."
                 ></textarea>
               </div>
@@ -1964,8 +1962,7 @@
                   id="went-bad"
                   bind:value={wentBad}
                   onblur={() => autoSaveReflectionField("wentBad", wentBad)}
-                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
-                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
                   placeholder="Your thoughts..."
                 ></textarea>
               </div>
@@ -1986,8 +1983,7 @@
                       "emotionalReflection",
                       emotionalReflection,
                     )}
-                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
-                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
                   placeholder="Your thoughts..."
                 ></textarea>
               </div>
