@@ -500,6 +500,7 @@
   let isAddingObjective = $state(false);
   let selectedObjective = $state<string>("");
   let emotionalState = $state<string>("");
+  let emotionalStateScore = $state(3);
   let objectiveExecution = $state("");
   let wentWell = $state("");
   let wentBad = $state("");
@@ -687,6 +688,7 @@
         localStorage.getItem(
           reflectionFieldKey(match.matchId, "emotionalReflection"),
         ) || "";
+      emotionalStateScore = emotionToScore(emotionalState);
       const storedObjective = localStorage.getItem("currentLearningObjective");
       selectedObjective = resolveObjectiveSelection(storedObjective);
       if (selectedObjective) {
@@ -766,6 +768,7 @@
     reflectionText = "";
     reflectionError = "";
     emotionalState = "";
+    emotionalStateScore = 3;
     objectiveExecution = "";
     wentWell = "";
     wentBad = "";
@@ -855,12 +858,34 @@
 
   function updateEmotionalState(value: string) {
     emotionalState = value;
+    emotionalStateScore = emotionToScore(value);
     if (selectedMatch) {
       localStorage.setItem(
         reflectionFieldKey(selectedMatch.matchId, "emotion"),
         value,
       );
     }
+  }
+
+  const emotionScale = [
+    { score: 1, value: "😤 Tilted", label: "Tilted" },
+    { score: 2, value: "😴 Tired", label: "Tired" },
+    { score: 3, value: "😐 Neutral", label: "Neutral" },
+    { score: 4, value: "🙂 Good", label: "Good" },
+    { score: 5, value: "😎 Confident", label: "Confident" },
+  ] as const;
+
+  function emotionToScore(value: string): number {
+    return emotionScale.find((entry) => entry.value === value)?.score ?? 3;
+  }
+
+  function scoreToEmotion(score: number): string {
+    return emotionScale.find((entry) => entry.score === score)?.value ?? "😐 Neutral";
+  }
+
+  function updateEmotionalStateFromSlider(score: number) {
+    emotionalStateScore = score;
+    updateEmotionalState(scoreToEmotion(score));
   }
 
   function autoSaveReflectionField(field: string, value: string) {
@@ -1718,54 +1743,62 @@
               </div>
             </div>
 
-            <!-- Emotional State Dropdown (Per Match) -->
+            <!-- Objective Execution -->
             <div class="mb-4">
               <label
-                for="emotional-state"
+                for="objective-execution"
                 class="block text-base font-semibold text-gray-300 mb-2"
-                >How did you feel this game?</label
+                >Do you believe you executed on the objective?</label
               >
-              <select
-                id="emotional-state"
-                bind:value={emotionalState}
-                onchange={(e) =>
-                  updateEmotionalState((e.target as HTMLSelectElement).value)}
-                class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-gray-300 text-base appearance-none cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none"
-                style="background-color: #131620; border: 1px solid #252b3d; color: #e5e7eb;"
+              <textarea
+                id="objective-execution"
+                bind:value={objectiveExecution}
+                onblur={() =>
+                  autoSaveReflectionField(
+                    "objectiveExecution",
+                    objectiveExecution,
+                  )}
+                class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
+                style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
+                placeholder="Your thoughts..."
+              ></textarea>
+            </div>
+
+            <!-- Emotional State Slider (Per Match) -->
+            <div class="mb-4">
+              <label
+                for="emotional-state-slider"
+                class="block text-base font-semibold text-gray-300 mb-2"
+                >How do you feel? ({emotionalState || scoreToEmotion(emotionalStateScore)})</label
               >
-                <option value="">Select emotional state...</option>
-                <option value="😤 Tilted">😤 Tilted</option>
-                <option value="😐 Neutral">😐 Neutral</option>
-                <option value="🙂 Good">🙂 Good</option>
-                <option value="😤 Frustrated">😤 Frustrated</option>
-                <option value="😎 Confident">😎 Confident</option>
-                <option value="😴 Tired">😴 Tired</option>
-              </select>
+              <input
+                id="emotional-state-slider"
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={emotionalStateScore}
+                oninput={(e) =>
+                  updateEmotionalStateFromSlider(
+                    Number((e.target as HTMLInputElement).value),
+                  )}
+                class="w-full accent-purple-500"
+              />
+              <div class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-gray-400">
+                {#each emotionScale as emotion (emotion.score)}
+                  <button
+                    type="button"
+                    class={`rounded px-2 py-1 border transition ${emotion.score === emotionalStateScore ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-gray-700 hover:border-gray-500"}`}
+                    onclick={() => updateEmotionalStateFromSlider(emotion.score)}
+                  >
+                    <span>{emotion.score}. {emotion.value}</span>
+                  </button>
+                {/each}
+              </div>
             </div>
 
             <!-- Reflection Questions -->
             <div class="space-y-3 mb-4">
-              <!-- Objective Execution -->
-              <div>
-                <label
-                  for="objective-execution"
-                  class="block text-base font-semibold text-gray-300 mb-2"
-                  >Did you execute on your learning objective?</label
-                >
-                <textarea
-                  id="objective-execution"
-                  bind:value={objectiveExecution}
-                  onblur={() =>
-                    autoSaveReflectionField(
-                      "objectiveExecution",
-                      objectiveExecution,
-                    )}
-                  class="w-full px-3 py-2 h-20 bg-gray-800 border border-gray-600 rounded text-base text-gray-300 resize-vertical"
-                  style="background-color: #0c0e14; border: 1px solid #252b3d; color: #e5e7eb; font-family: 'DM Sans', sans-serif; font-size: 16px;"
-                  placeholder="Your thoughts..."
-                ></textarea>
-              </div>
-
               <!-- What went well -->
               <div>
                 <label
