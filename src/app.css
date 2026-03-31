@@ -608,3 +608,155 @@ body.modal-open {
     background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
 }
 
+@media (max-width: 1024px) {
+    .match-card {
+        gap: 1.1rem;
+        padding: 1.1rem 1.2rem 1.05rem;
+    }
+
+    .match-card__right {
+        min-width: 112px;
+    }
+
+    .match-card__enemy-side {
+        min-width: 86px;
+    }
+}
+
+@media (max-width: 767px) {
+    .match-days {
+        gap: 1rem;
+    }
+
+    .match-day-header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .match-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.9rem;
+        padding: 0.95rem 0.85rem;
+        border-top-left-radius: 14px;
+        border-bottom-left-radius: 14px;
+    }
+
+    .match-card__left {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.8rem;
+    }
+
+    .match-card__body {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .match-card__meta {
+        flex-wrap: wrap;
+    }
+
+    .match-card__items {
+        flex-wrap: wrap;
+    }
+
+    .match-card__center,
+    .match-card__right,
+    .match-card__enemy-side {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .match-card__center {
+        align-items: flex-start;
+    }
+
+    .match-card__right {
+        order: 3;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .match-card__enemy-side {
+        order: 4;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .match-card__pair--enemy {
+        align-items: center;
+    }
+
+    .match-card__coach-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .match-card__coach-panel {
+        padding: 0.75rem;
+    }
+
+    .match-card__reflection-chip {
+        top: 0.45rem;
+        right: 0.6rem;
+        font-size: 0.63rem;
+    }
+
+    .match-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.85rem;
+    }
+
+    .match-filter-dropdown {
+        width: 100%;
+    }
+
+    .match-filter-trigger {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .match-filter-menu {
+        left: 0;
+        right: 0;
+        width: auto;
+        max-width: 100%;
+        max-height: min(55vh, 360px);
+        overflow-y: auto;
+    }
+}
+
+@media (max-width: 420px) {
+    .match-card__champion-circle--player,
+    .match-card__champion-circle--enemy {
+        width: 44px;
+        height: 44px;
+    }
+
+    .match-card__champion-circle--jungler {
+        width: 33px;
+        height: 33px;
+    }
+
+    .match-card__champ-name {
+        font-size: 0.82rem;
+    }
+
+    .match-card__meta {
+        font-size: 0.72rem;
+    }
+
+    .match-card__item-slot {
+        width: 24px;
+        height: 24px;
+    }
+}
+

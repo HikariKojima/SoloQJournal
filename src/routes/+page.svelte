@@ -10,7 +10,7 @@
     profileIcon,
     setDdragonVersion,
   } from "$lib/utils/ddragon";
-  import { Search, ChevronDown } from "lucide-svelte";
+  import { Search, ChevronDown, Menu, X } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -526,11 +526,26 @@
   let sentinelElement = $state<HTMLElement | null>(null);
   let debugInfiniteScroll = $state(true);
   let debugEvents = $state<string[]>([]);
+  let isMobileProfilesOpen = $state(false);
 
   function debugLog(message: string) {
     if (!debugInfiniteScroll) return;
     const stamp = new Date().toLocaleTimeString();
     debugEvents = [`${stamp} - ${message}`, ...debugEvents].slice(0, 20);
+  }
+
+  function openMobileProfiles() {
+    isMobileProfilesOpen = true;
+  }
+
+  function closeMobileProfiles() {
+    isMobileProfilesOpen = false;
+  }
+
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape" && isMobileProfilesOpen) {
+      closeMobileProfiles();
+    }
   }
 
   const currentProfileKey = $derived.by(() => {
@@ -1062,15 +1077,40 @@
   }
 </script>
 
-<svelte:window on:click={handleChampionFilterOutsideClick} />
+<svelte:window
+  on:click={handleChampionFilterOutsideClick}
+  on:keydown={handleGlobalKeydown}
+/>
 
-<div class="min-h-screen flex flex-col lg:flex-row match-page">
+<div class="min-h-screen match-page lg:flex">
+  {#if isMobileProfilesOpen}
+    <button
+      type="button"
+      aria-label="Close saved profiles"
+      class="fixed inset-0 z-40 bg-black/60 lg:hidden"
+      onclick={closeMobileProfiles}
+    ></button>
+  {/if}
+
   <!-- Sidebar -->
-  <aside class="w-full lg:w-64 p-4 match-sidebar">
-    <h2 class="text-xl font-bold mb-4">Saved Profiles</h2>
+  <aside
+    class={`match-sidebar fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
+    aria-label="Saved profiles"
+  >
+    <div class="mb-3 flex items-center justify-between lg:mb-4">
+      <h2 class="text-xl font-bold">Saved Profiles</h2>
+      <button
+        type="button"
+        class="inline-flex items-center justify-center rounded p-1.5 text-gray-300 hover:bg-gray-700 lg:hidden"
+        aria-label="Close saved profiles"
+        onclick={closeMobileProfiles}
+      >
+        <X size={18} />
+      </button>
+    </div>
     <ul class="space-y-2">
       {#each profileStore.list as profile, i (`${profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
-        <li class="flex items-center gap-2">
+        <li class="flex items-start gap-2">
           <button
             class="flex-1 text-left p-2 rounded cursor-pointer hover:bg-gray-700 transition {i ===
             profileStore.activeIndex
@@ -1078,11 +1118,12 @@
               : ''}"
             onclick={() => {
               profileStore.setActive(i);
+              closeMobileProfiles();
               loadProfile(profile);
             }}
           >
-            {profile.gameName}{profile.tagLine}
-            <span class="ml-2 text-sm text-gray-400 uppercase">{profile.region}</span>
+            <span class="break-all">{profile.gameName}{profile.tagLine}</span>
+            <span class="ml-2 text-xs sm:text-sm text-gray-400 uppercase">{profile.region}</span>
           </button>
           <button
             type="button"
@@ -1101,7 +1142,18 @@
   </aside>
 
   <!-- Main content -->
-  <main class="flex-1 p-6">
+  <main class="flex-1 p-3 sm:p-4 lg:p-6">
+    <div class="mb-3 lg:hidden">
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm font-medium text-gray-100 hover:bg-gray-800"
+        onclick={openMobileProfiles}
+      >
+        <Menu size={16} />
+        Saved Profiles
+      </button>
+    </div>
+
     <!-- Search -->
     <div class="mb-6">
       <!-- Region Select -->
@@ -1112,7 +1164,7 @@
         <select
           id="platform"
           bind:value={selectedRegion}
-          class="w-40 p-2 bg-gray-800 border border-gray-600 rounded"
+          class="w-full sm:w-40 p-2 bg-gray-800 border border-gray-600 rounded"
         >
           {#each regionOptions as region (region.value)}
             <option value={region.value}>{region.label}</option>
@@ -1121,8 +1173,11 @@
       </div>
 
       <!-- Game Name and Tag Line (connected) -->
-      <form class="flex gap-2 items-end" onsubmit={handleSearchSubmit}>
-        <div class="flex-1">
+      <form
+        class="flex flex-col sm:flex-row gap-3 sm:gap-2 items-stretch sm:items-end"
+        onsubmit={handleSearchSubmit}
+      >
+        <div class="w-full flex-1">
           <label for="gameName" class="block text-base font-medium mb-1"
             >Game Name</label
           >
@@ -1133,7 +1188,7 @@
             placeholder={gameNamePlaceholder}
           />
         </div>
-        <div class="w-40">
+        <div class="w-full sm:w-40">
           <label for="tagLine" class="block text-base font-medium mb-1"
             >Tag Line</label
           >
@@ -1149,7 +1204,7 @@
         <button
           type="submit"
           disabled={loading}
-          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-2"
+          class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center justify-center gap-2"
         >
           <Search size={16} />
           {loading ? "Searching..." : "Search"}
@@ -1167,10 +1222,10 @@
 
     {#if loading}
       <div class="mb-6 p-4 match-profile-card animate-pulse">
-        <div class="flex items-center gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <div class="h-14 w-14 rounded-full bg-gray-700/60"></div>
           <div class="flex-1 space-y-2">
-            <div class="h-6 w-56 rounded bg-gray-700/60"></div>
+            <div class="h-6 w-40 sm:w-56 rounded bg-gray-700/60"></div>
             <div class="h-4 w-28 rounded bg-gray-700/50"></div>
             <div class="h-4 w-36 rounded bg-gray-700/40"></div>
           </div>
@@ -1238,7 +1293,7 @@
     {:else if currentProfile}
       <!-- Profile info -->
       <div class="mb-6 p-4 match-profile-card">
-        <div class="flex items-center gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
             <img
               src={profileIcon(currentProfile.summoner.profileIconId)}
@@ -1248,8 +1303,8 @@
             />
           {/if}
 
-          <div>
-            <h1 class="text-2xl font-bold">{currentProfile.summoner.name}</h1>
+          <div class="text-center sm:text-left">
+            <h1 class="text-xl sm:text-2xl font-bold wrap-break-words">{currentProfile.summoner.name}</h1>
             <p>Level: {currentProfile.summoner.level}</p>
             {#if winRate !== null}
               <p>Win Rate: {winRate}%</p>
@@ -1287,7 +1342,7 @@
             Filter games by champion and matchup (current season Solo/Duo only)
           </p>
         </div>
-        <div class="flex flex-wrap gap-3">
+        <div class="flex w-full flex-col sm:flex-row sm:flex-wrap gap-3">
           <div
             class="match-filter-dropdown"
             bind:this={championFilterDropdownEl}
@@ -1493,7 +1548,7 @@
             </button>
           </div>
 
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <p>hasMore: <strong>{String(hasMore)}</strong></p>
             <p>isLoadingMore: <strong>{String(isLoadingMore)}</strong></p>
             <p>nextOffset: <strong>{nextOffset}</strong></p>
@@ -1516,7 +1571,7 @@
 
       {#if reflectionModalOpen && selectedMatch}
         <div
-          class="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
           role="button"
           tabindex="0"
           aria-label="Close journal modal"
@@ -1534,10 +1589,10 @@
           }}
         >
           <div
-            class="journal-modal relative w-[min(95vw,750px)] bg-gray-900 border border-gray-700 rounded p-6 shadow-lg max-h-[90vh] overflow-y-auto text-base leading-relaxed"
+            class="journal-modal relative w-[min(96vw,750px)] bg-gray-900 border border-gray-700 rounded p-4 sm:p-6 shadow-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto text-sm sm:text-base leading-relaxed"
           >
             <!-- Header with result color coding -->
-            <div class="flex justify-between items-start mb-4">
+            <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 class="text-xl font-bold mb-1">
                   Journal
@@ -1590,12 +1645,12 @@
             <!-- Stats Dashboard Grid -->
             <div class="mb-4 p-4 bg-gray-800 rounded border border-gray-700">
               <h3 class="text-base font-semibold mb-3">Performance Stats</h3>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <!-- CS/Min -->
-                <div class="bg-gray-700 p-3 rounded">
+                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">CS/Min</p>
                   <p
-                    class="text-2xl font-bold {matchStats.csPerMin > 8
+                    class="text-xl sm:text-2xl font-bold {matchStats.csPerMin > 8
                       ? 'text-green-400'
                       : matchStats.csPerMin > 6
                         ? 'text-lime-400'
@@ -1608,10 +1663,10 @@
                 </div>
 
                 <!-- Gold/Min -->
-                <div class="bg-gray-700 p-3 rounded">
+                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">Gold/Min</p>
                   <p
-                    class="text-2xl font-bold {matchStats.goldPerMin > 550
+                    class="text-xl sm:text-2xl font-bold {matchStats.goldPerMin > 550
                       ? 'text-green-400'
                       : matchStats.goldPerMin > 450
                         ? 'text-lime-400'
@@ -1624,10 +1679,10 @@
                 </div>
 
                 <!-- Kill Participation -->
-                <div class="bg-gray-700 p-3 rounded">
+                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">Kill Participation</p>
                   <p
-                    class="text-2xl font-bold {matchStats.kpPercent > 60
+                    class="text-xl sm:text-2xl font-bold {matchStats.kpPercent > 60
                       ? 'text-green-400'
                       : matchStats.kpPercent > 45
                         ? 'text-lime-400'
@@ -1640,10 +1695,10 @@
                 </div>
 
                 <!-- Death Contribution -->
-                <div class="bg-gray-700 p-3 rounded">
+                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">Death Contribution</p>
                   <p
-                    class="text-2xl font-bold {matchStats.deathPercent < 20
+                    class="text-xl sm:text-2xl font-bold {matchStats.deathPercent < 20
                       ? 'text-green-400'
                       : matchStats.deathPercent < 35
                         ? 'text-lime-400'
@@ -1656,10 +1711,10 @@
                 </div>
 
                 <!-- CS at 10 -->
-                <div class="bg-gray-700 p-3 rounded">
+                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">CS at 10</p>
                   <p
-                    class="text-2xl font-bold {matchStats.csAt10 === null
+                    class="text-xl sm:text-2xl font-bold {matchStats.csAt10 === null
                       ? 'text-gray-500'
                       : matchStats.csAt10 >= 80
                         ? 'text-green-400'
@@ -1678,10 +1733,10 @@
                 </div>
 
                 <!-- CS at 20 -->
-                <div class="bg-gray-700 p-3 rounded">
+                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">CS at 20</p>
                   <p
-                    class="text-2xl font-bold {matchStats.csAt20 === null
+                    class="text-xl sm:text-2xl font-bold {matchStats.csAt20 === null
                       ? 'text-gray-500'
                       : matchStats.csAt20 >= 165
                         ? 'text-green-400'

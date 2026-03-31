@@ -241,6 +241,7 @@
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.94));
     padding: 0.78rem 0.9rem;
     color: #e2e8f0;
+    max-width: 72ch;
   }
 
   @keyframes coaching-pulse {
@@ -294,5 +295,34 @@
 
   :global(.coaching-prose strong) {
     color: #f8fafc;
+  }
+
+  @media (max-width: 640px) {
+    .coaching-panel-shell {
+      padding: 0.8rem 0.78rem;
+    }
+
+    .coaching-loading-row {
+      width: 100%;
+      justify-content: center;
+      font-size: 0.75rem;
+    }
+
+    .coaching-output {
+      padding: 0.7rem 0.72rem;
+      margin-top: 0.6rem;
+    }
+
+    :global(.coaching-prose h2) {
+      font-size: 0.92rem;
+    }
+
+    :global(.coaching-prose h3) {
+      font-size: 0.84rem;
+    }
+
+    :global(.coaching-prose p) {
+      font-size: 0.8rem;
+    }
   }
 </style>
