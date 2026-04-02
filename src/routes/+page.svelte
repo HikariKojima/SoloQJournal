@@ -3,7 +3,11 @@
   import MatchCard from "$lib/components/MatchCard.svelte";
   import { profileStore } from "$lib/profile.svelte";
   import type { PageData } from "./$types";
-  import type { MatchSummaryResponse, ProfileData } from "$lib/types";
+  import type {
+    MatchSummaryResponse,
+    ProfileData,
+    RankedSoloEntry,
+  } from "$lib/types";
   import { buildHistoryStats } from "$lib/utils/coaching";
   import {
     championIcon,
@@ -23,6 +27,8 @@
   let tagLineError = $state("");
   let currentSearchGameName = $state("");
   let currentSearchTagLine = $state("");
+  let rankIconFailed = $state(false);
+  let rankIconIndex = $state(0);
   
   // All matches loaded for filter options (lazy loaded in background)
   let allSeasonMatches = $state<MatchSummaryResponse[]>([]);
@@ -248,6 +254,7 @@
         region: selectedRegion,
         summoner: fetchedProfile.summoner,
         matches: fetchedProfile.matches,
+        rankedSolo: fetchedProfile.rankedSolo ?? null,
         lastFetched: new Date().toISOString(),
       });
 
@@ -355,6 +362,61 @@
       (m) => m.result === "win",
     ).length;
     return Math.round((wins / currentProfile.matches.length) * 100);
+  });
+
+  const rankedSolo = $derived.by(() => currentProfile?.rankedSolo ?? null);
+
+  const rankedWinRate = $derived.by(() => {
+    if (!rankedSolo) return null;
+    const total = rankedSolo.wins + rankedSolo.losses;
+    if (total <= 0) return null;
+    return Math.round((rankedSolo.wins / total) * 100);
+  });
+
+  function isApexTier(tier: string): boolean {
+    return ["MASTER", "GRANDMASTER", "CHALLENGER"].includes(tier);
+  }
+
+  function rankIconCandidates(entry: RankedSoloEntry | null): string[] {
+    if (!entry?.tier || entry.tier === "UNRANKED") return [];
+    const tier = entry.tier.toLowerCase();
+    return [
+      `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-${tier}.png`,
+      `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-ranked/global/default/assets/images/ranked-emblem/emblem-${tier}.png`,
+      `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-ranked/assets/images/ranked-emblem/emblem-${tier}.png`,
+    ];
+  }
+
+  const currentRankIconUrl = $derived.by(() => {
+    const candidates = rankIconCandidates(rankedSolo);
+    if (!candidates.length) return null;
+    return candidates[rankIconIndex] ?? null;
+  });
+
+  function handleRankIconError() {
+    const candidates = rankIconCandidates(rankedSolo);
+    if (rankIconIndex < candidates.length - 1) {
+      rankIconIndex += 1;
+      return;
+    }
+    rankIconFailed = true;
+  }
+
+  const rankedLabel = $derived.by(() => {
+    if (!rankedSolo) return "UNRANKED";
+    if (!rankedSolo.rank || isApexTier(rankedSolo.tier)) {
+      return rankedSolo.tier;
+    }
+    return `${rankedSolo.tier} ${rankedSolo.rank}`;
+  });
+
+  const currentLeagueEntry = $derived.by(() => {
+    if (!rankedSolo) return null;
+    return {
+      tier: rankedSolo.tier,
+      rank: rankedSolo.rank,
+      lp: rankedSolo.lp,
+    };
   });
 
   let selectedChampion = $state<string | null>(null);
@@ -551,6 +613,12 @@
   const currentProfileKey = $derived.by(() => {
     if (!currentProfile) return "";
     return `${currentProfile.summoner.puuid}`;
+  });
+
+  $effect(() => {
+    currentProfileKey;
+    rankIconFailed = false;
+    rankIconIndex = 0;
   });
 
   // Reset full-season filter cache whenever the active profile changes
@@ -1293,21 +1361,59 @@
     {:else if currentProfile}
       <!-- Profile info -->
       <div class="mb-6 rounded-2xl bg-(--card-bg) p-4 max-sm:p-3">
-        <div class="flex flex-col items-center gap-2.5 text-center">
-          {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
-            <img
-              src={profileIcon(currentProfile.summoner.profileIconId)}
-              alt={`${currentProfile.summoner.name} profile icon`}
-              class="h-14 w-14 rounded-full border border-gray-600 object-cover max-sm:h-12 max-sm:w-12"
-              loading="lazy"
-            />
-          {/if}
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div class="flex items-center gap-3">
+            {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
+              <img
+                src={profileIcon(currentProfile.summoner.profileIconId)}
+                alt={`${currentProfile.summoner.name} profile icon`}
+                class="h-14 w-14 rounded-full border border-gray-600 object-cover max-sm:h-12 max-sm:w-12"
+                loading="lazy"
+              />
+            {/if}
 
-          <div>
-            <h1 class="text-xl font-bold wrap-break-word max-sm:text-lg sm:text-2xl">{currentProfile.summoner.name}</h1>
-            <p class="text-sm sm:text-base">Level: {currentProfile.summoner.level}</p>
-            {#if winRate !== null}
-              <p class="text-sm sm:text-base">Win Rate: {winRate}%</p>
+            <div>
+              <h1 class="text-xl font-bold wrap-break-word max-sm:text-lg sm:text-2xl">{currentProfile.summoner.name}</h1>
+              <p class="text-sm sm:text-base">Level: {currentProfile.summoner.level}</p>
+              {#if winRate !== null}
+                <p class="text-sm sm:text-base">Match Win Rate: {winRate}%</p>
+              {/if}
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.7)] p-3 md:min-w-63.75">
+            <p class="text-[0.72rem] uppercase tracking-[0.14em] text-(--text-muted)">Solo/Duo Rank</p>
+            {#if rankedSolo}
+              <div class="mt-2 flex items-center gap-3">
+                {#if currentRankIconUrl && !rankIconFailed}
+                  <div class="h-19 w-19 overflow-hidden rounded-full max-sm:h-17 max-sm:w-17">
+                    <img
+                      src={currentRankIconUrl}
+                      alt={`${rankedLabel} emblem`}
+                      loading="lazy"
+                      class="h-full w-full scale-[2.5] object-contain object-center"
+                      onerror={handleRankIconError}
+                    />
+                  </div>
+                {:else}
+                  <div class="inline-flex h-19 w-19 items-center justify-center rounded-full border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.9)] text-[0.72rem] font-semibold text-(--text-muted) max-sm:h-17 max-sm:w-17">
+                    UNR
+                  </div>
+                {/if}
+
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-(--text-primary)">{rankedLabel}</p>
+                  <p class="text-[0.8rem] font-medium text-[#c4b5fd]">{rankedSolo.lp} LP</p>
+          
+                  {#if rankIconFailed}
+                    <p class="mt-1 text-[0.68rem] text-(--text-muted)">
+                      Emblem unavailable (CDN fallback used).
+                    </p>
+                  {/if}
+                </div>
+              </div>
+            {:else}
+              <p class="mt-2 text-sm font-medium text-(--text-muted)">Unranked</p>
             {/if}
           </div>
         </div>
@@ -1342,9 +1448,9 @@
             Filter games by champion and matchup (current season Solo/Duo only)
           </p>
         </div>
-        <div class="flex w-full flex-col sm:flex-row sm:flex-wrap gap-3">
+        <div class="flex w-full flex-col gap-3 md:ml-auto md:w-auto md:flex-row md:items-center">
           <div
-            class="relative w-full"
+            class="relative w-full md:w-64"
             bind:this={championFilterDropdownEl}
           >
             <button
@@ -1407,7 +1513,7 @@
           </div>
 
           <div
-            class="relative w-full"
+            class="relative w-full md:w-64"
             bind:this={opponentFilterDropdownEl}
           >
             <button
@@ -1495,7 +1601,7 @@
                   {match}
                   history={computedHistory}
                   playerPuuid={currentProfile.summoner.puuid}
-                  leagueEntry={null}
+                  leagueEntry={currentLeagueEntry}
                   hasReflection={!!getReflection(match)}
                   onMatchSelect={openReflection}
                 />

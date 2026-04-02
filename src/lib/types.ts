@@ -120,6 +120,14 @@ export type AiAnalysisResponse = {
   }>;
 };
 
+export type RankedSoloEntry = {
+  tier: string;
+  rank: string;
+  lp: number;
+  wins: number;
+  losses: number;
+};
+
 // Additional types for the app
 export type SavedProfile = {
   gameName: string;
@@ -128,9 +136,11 @@ export type SavedProfile = {
   summoner: SummonerResponse;
   matches: MatchSummaryResponse[];
   lastFetched: string;
+  rankedSolo?: RankedSoloEntry | null;
 };
 
 export type ProfileData = {
   summoner: SummonerResponse;
   matches: MatchSummaryResponse[];
+  rankedSolo?: RankedSoloEntry | null;
 } | null;

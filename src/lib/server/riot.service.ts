@@ -10,6 +10,7 @@ import { RIOT_API_KEY } from "$env/static/private";
 import type {
   MatchDetailsResponse,
   MatchSummaryResponse,
+  RankedSoloEntry,
   SummonerResponse,
 } from "$lib/types";
 
@@ -420,6 +421,64 @@ export async function getSummonerByPuuid(
   };
 }
 
+export async function getRankedSoloEntry(
+  region: string,
+  summonerId: string,
+  puuid?: string,
+): Promise<RankedSoloEntry | null> {
+  if (!summonerId && !puuid) return null;
+
+  const base = PLATFORM_BASES[region] || `https://${region}.api.riotgames.com`;
+
+  const parseSoloEntry = (data: unknown): RankedSoloEntry | null => {
+    if (!Array.isArray(data)) return null;
+
+    // Riot docs: queueType for Solo/Duo is RANKED_SOLO_5x5.
+    const soloEntry = data.find(
+      (entry: any) => entry?.queueType === "RANKED_SOLO_5x5",
+    );
+
+    if (!soloEntry) return null;
+
+    return {
+      tier: String(soloEntry.tier ?? "UNRANKED").toUpperCase(),
+      rank: String(soloEntry.rank ?? "").toUpperCase(),
+      lp:
+        typeof soloEntry.leaguePoints === "number"
+          ? soloEntry.leaguePoints
+          : 0,
+      wins: typeof soloEntry.wins === "number" ? soloEntry.wins : 0,
+      losses: typeof soloEntry.losses === "number" ? soloEntry.losses : 0,
+    };
+  };
+
+  try {
+    if (summonerId) {
+      const bySummonerUrl = `${base}/lol/league/v4/entries/by-summoner/${encodeURIComponent(summonerId)}`;
+      const bySummonerData = await riotFetch(bySummonerUrl, true);
+      const bySummonerResult = parseSoloEntry(bySummonerData);
+      if (bySummonerResult) {
+        return bySummonerResult;
+      }
+    }
+
+    if (puuid) {
+      // Fallback for environments where by-summoner may not resolve as expected.
+      const byPuuidUrl = `${base}/lol/league/v4/entries/by-puuid/${encodeURIComponent(puuid)}`;
+      const byPuuidData = await riotFetch(byPuuidUrl, true);
+      const byPuuidResult = parseSoloEntry(byPuuidData);
+      if (byPuuidResult) {
+        return byPuuidResult;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error("Failed to fetch ranked solo entry:", err);
+    return null;
+  }
+}
+
 export async function getMatchIds(
   region: string,
   puuid: string,
@@ -594,10 +653,17 @@ export async function getFullProfile(
   gameName: string,
   tagLine: string,
   platform: string = "euw1",
-): Promise<{ summoner: SummonerResponse; matches: MatchSummaryResponse[] }> {
+): Promise<{
+  summoner: SummonerResponse;
+  matches: MatchSummaryResponse[];
+  rankedSolo: RankedSoloEntry | null;
+}> {
   const account = await getSummonerByRiotId(gameName, tagLine, platform);
   const region = platform;
   const summoner = await getSummonerByPuuid(region, account.puuid);
-  const matches = await getMatchSummaries(region, account.puuid, 0, 10);
-  return { summoner, matches };
+  const [matches, rankedSolo] = await Promise.all([
+    getMatchSummaries(region, account.puuid, 0, 10),
+    getRankedSoloEntry(region, summoner.id, summoner.puuid),
+  ]);
+  return { summoner, matches, rankedSolo };
 }

@@ -16,6 +16,7 @@ import type { RequestEvent } from "@sveltejs/kit";
 import {
   getAllFilteredMatchesForSeason,
   getFilteredMatchPage,
+  getRankedSoloEntry,
   getSummonerByRiotId,
   getSummonerByPuuid,
 } from "$lib/server/riot.service";
@@ -84,8 +85,14 @@ export async function GET({ url }: RequestEvent) {
 
       if (offsetRaw === 0) {
         const summoner = await getSummonerByPuuid(region, account.puuid);
+        const rankedSolo = await getRankedSoloEntry(
+          region,
+          summoner.id,
+          summoner.puuid,
+        );
         return json({
           summoner,
+          rankedSolo,
           matches,
           nextOffset: 0,
           hasMore,
@@ -105,8 +112,14 @@ export async function GET({ url }: RequestEvent) {
 
     if (offsetRaw === 0) {
       const summoner = await getSummonerByPuuid(region, account.puuid);
+      const rankedSolo = await getRankedSoloEntry(
+        region,
+        summoner.id,
+        summoner.puuid,
+      );
       return json({
         summoner,
+        rankedSolo,
         matches: page.matches,
         nextOffset: page.nextOffset,
         hasMore: page.hasMore,
