@@ -101,7 +101,6 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
           }
           controller.close();
         } catch (err) {
-          console.error("Coaching stream failed:", err);
           controller.error(err);
         }
       },

@@ -82,8 +82,7 @@ class ProfileStore {
           );
           // Persist cleaned data so migration runs once for legacy duplicates.
           localStorage.setItem("lol-profiles", JSON.stringify(this.list));
-        } catch (err) {
-          console.error("Failed to parse stored profiles:", err);
+        } catch {
         }
       }
     }

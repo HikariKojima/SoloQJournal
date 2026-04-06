@@ -45,33 +45,6 @@ function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): 
   });
 }
 
-// ===== RATE LIMITING =====
-let requestCount = 0;
-let windowResetAt = Date.now() + 60_000;
-const RATE_LIMIT_MAX = 100; // Conservative: Riot allows 120/min
-
-function checkRateLimit(): boolean {
-  const now = Date.now();
-  if (now > windowResetAt) {
-    requestCount = 0;
-    windowResetAt = now + 60_000;
-  }
-  return requestCount < RATE_LIMIT_MAX;
-}
-
-function recordRequest(): void {
-  requestCount++;
-}
-
-async function waitForRateLimit(): Promise<void> {
-  if (!checkRateLimit()) {
-    const waitTime = windowResetAt - Date.now() + 100;
-    await new Promise((resolve) => setTimeout(resolve, Math.max(100, waitTime)));
-    requestCount = 0;
-    windowResetAt = Date.now() + 60_000;
-  }
-}
-
 // Riot API base URLs
 const PLATFORM_BASES: Record<string, string> = {
   na1: "https://na1.api.riotgames.com",
@@ -117,10 +90,84 @@ function getRegionalBase(platform: string): string {
 }
 
 const SOLO_DUO_QUEUE_ID = 420;
-// Keep parallel match-detail requests conservative to avoid Riot's
-// short-window (per-second) rate limits when loading many matches.
 const INTERNAL_BATCH_SIZE = 10;
 const CURRENT_SEASON_START_MS = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+
+// ===== RATE LIMITING (Personal/Dev Key: 20 req/1s, 100 req/2m per region) =====
+type RateLimitBucket = {
+  tokens: number;
+  lastRefillMs: number;
+};
+
+const RATE_LIMIT_CONFIG = {
+  PER_SECOND: { tokens: 20, windowMs: 1000 },
+  PER_TWO_MIN: { tokens: 100, windowMs: 120 * 1000 },
+};
+
+const rateLimitBuckets = new Map<string, Map<string, RateLimitBucket>>();
+
+function getRegionLimitKey(region: string): string {
+  const regionalBase = getRegionalBase(region);
+  // Extract region identifier (americas, europe, asia)
+  if (regionalBase.includes("americas")) return "americas";
+  if (regionalBase.includes("europe")) return "europe";
+  if (regionalBase.includes("asia")) return "asia";
+  return region;
+}
+
+function initializeBucketsForRegion(region: string): void {
+  const limitKey = getRegionLimitKey(region);
+  if (!rateLimitBuckets.has(limitKey)) {
+    rateLimitBuckets.set(
+      limitKey,
+      new Map([
+        ["perSecond", { tokens: RATE_LIMIT_CONFIG.PER_SECOND.tokens, lastRefillMs: Date.now() }],
+        ["perTwoMin", { tokens: RATE_LIMIT_CONFIG.PER_TWO_MIN.tokens, lastRefillMs: Date.now() }],
+      ]),
+    );
+  }
+}
+
+function refillBucket(bucket: RateLimitBucket, config: { tokens: number; windowMs: number }): void {
+  const now = Date.now();
+  const elapsed = now - bucket.lastRefillMs;
+  const refillAmount = (elapsed / config.windowMs) * config.tokens;
+  bucket.tokens = Math.min(config.tokens, bucket.tokens + refillAmount);
+  bucket.lastRefillMs = now;
+}
+
+async function waitForRateLimit(region: string): Promise<void> {
+  initializeBucketsForRegion(region);
+  const limitKey = getRegionLimitKey(region);
+  const buckets = rateLimitBuckets.get(limitKey)!;
+
+  // Check both rate limits
+  const perSecBucket = buckets.get("perSecond")!;
+  const perTwoMinBucket = buckets.get("perTwoMin")!;
+
+  refillBucket(perSecBucket, RATE_LIMIT_CONFIG.PER_SECOND);
+  refillBucket(perTwoMinBucket, RATE_LIMIT_CONFIG.PER_TWO_MIN);
+
+  // Wait until both buckets have tokens available
+  let waitMs = 0;
+  while (perSecBucket.tokens < 1 || perTwoMinBucket.tokens < 1) {
+    waitMs = Math.min(
+      perSecBucket.tokens < 1 ? RATE_LIMIT_CONFIG.PER_SECOND.windowMs / RATE_LIMIT_CONFIG.PER_SECOND.tokens : Infinity,
+      perTwoMinBucket.tokens < 1 ? RATE_LIMIT_CONFIG.PER_TWO_MIN.windowMs / RATE_LIMIT_CONFIG.PER_TWO_MIN.tokens : Infinity,
+    );
+
+    if (waitMs > 0 && isFinite(waitMs)) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+
+    refillBucket(perSecBucket, RATE_LIMIT_CONFIG.PER_SECOND);
+    refillBucket(perTwoMinBucket, RATE_LIMIT_CONFIG.PER_TWO_MIN);
+  }
+
+  // Consume tokens
+  perSecBucket.tokens -= 1;
+  perTwoMinBucket.tokens -= 1;
+}
 
 export type MatchFilters = {
   champion?: string;
@@ -141,59 +188,64 @@ async function riotFetch(
   // Check cache first (skip for mutations)
   if (useCache) {
     const cached = getCached(apiCache, url);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
   }
 
-  let attempt = 0;
+  // Extract region from URL for rate limiting
+  let region = "euw1"; // default
+  if (url.includes("americas")) region = "na1";
+  else if (url.includes("europe")) region = "euw1";
+  else if (url.includes("asia")) region = "kr";
 
-  // Simple retry with backoff specifically for Riot 429 responses.
-  while (attempt <= maxRetries) {
-    // Rate limit check (our own conservative limiter)
-    await waitForRateLimit();
-    recordRequest();
+  // Wait for rate limit clearance before attempting request
+  await waitForRateLimit(region);
 
-    const res = await fetch(url, {
-      headers: {
-        "X-Riot-Token": API_KEY,
-      },
-    });
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "X-Riot-Token": API_KEY,
+        },
+      });
 
-    if (res.status === 429) {
-      // Respect Riot's suggested retry window when available.
-      const retryAfterHeader = res.headers.get("Retry-After");
-      const retryAfterSeconds = retryAfterHeader
-        ? Number(retryAfterHeader)
-        : 2;
+      if (res.status === 429) {
+        // Rate limited - check Retry-After header
+        const retryAfter = res.headers.get("Retry-After");
+        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000;
 
-      if (attempt < maxRetries) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.max(1000, retryAfterSeconds * 1000)),
-        );
-        attempt += 1;
-        continue;
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          continue; // Retry
+        } else {
+          throw new Error("Riot API rate limit exceeded (429).");
+        }
       }
 
-      throw new Error(
-        "Riot API rate limit exceeded. Please wait a bit and try again.",
-      );
+      if (!res.ok) {
+        throw new Error(`Riot API error: ${res.status} ${res.statusText}`);
+      }
+
+      const data = await res.json();
+
+      // Cache successful responses
+      if (useCache) {
+        setCached(apiCache, url, data);
+      }
+
+      return data;
+    } catch (err) {
+      lastError = err as Error;
+      // If it's the last retry, throw; otherwise continue
+      if (attempt < maxRetries) {
+        continue;
+      }
     }
-
-    if (!res.ok) {
-      throw new Error(`Riot API error: ${res.status} ${res.statusText}`);
-    }
-
-    const data = await res.json();
-
-    // Cache successful responses
-    if (useCache) {
-      setCached(apiCache, url, data);
-    }
-
-    return data;
   }
 
-  // Should be unreachable, but keeps TypeScript happy.
-  throw new Error("Riot API request failed after retries.");
+  throw lastError || new Error("Riot API request failed");
 }
 
 function normalizeChampionFilter(value?: string | null): string {
@@ -265,8 +317,7 @@ async function getTimelineCsAt(
 
     setCached(timelineCache, cacheKey, timelineCs);
     return timelineCs;
-  } catch (err) {
-    console.error(`Failed to fetch timeline for match ${targetMatchId}:`, err);
+  } catch {
     return {};
   }
 }
@@ -426,7 +477,9 @@ export async function getRankedSoloEntry(
   summonerId: string,
   puuid?: string,
 ): Promise<RankedSoloEntry | null> {
-  if (!summonerId && !puuid) return null;
+  const normalizedSummonerId = summonerId?.trim() ?? "";
+  const normalizedPuuid = puuid?.trim() ?? "";
+  if (!normalizedSummonerId && !normalizedPuuid) return null;
 
   const base = PLATFORM_BASES[region] || `https://${region}.api.riotgames.com`;
 
@@ -452,29 +505,39 @@ export async function getRankedSoloEntry(
     };
   };
 
+  const tryRankLookup = async (
+    source: "by-summoner" | "by-puuid",
+    idValue: string,
+  ): Promise<RankedSoloEntry | null> => {
+    const url =
+      source === "by-summoner"
+        ? `${base}/lol/league/v4/entries/by-summoner/${encodeURIComponent(idValue)}`
+        : `${base}/lol/league/v4/entries/by-puuid/${encodeURIComponent(idValue)}`;
+
+    try {
+      const rawData = await riotFetch(url, true);
+      return parseSoloEntry(rawData);
+    } catch (err: any) {
+      return null;
+    }
+  };
+
   try {
-    if (summonerId) {
-      const bySummonerUrl = `${base}/lol/league/v4/entries/by-summoner/${encodeURIComponent(summonerId)}`;
-      const bySummonerData = await riotFetch(bySummonerUrl, true);
-      const bySummonerResult = parseSoloEntry(bySummonerData);
-      if (bySummonerResult) {
-        return bySummonerResult;
-      }
+    if (normalizedSummonerId) {
+      const bySummonerResult = await tryRankLookup(
+        "by-summoner",
+        normalizedSummonerId,
+      );
+      if (bySummonerResult) return bySummonerResult;
     }
 
-    if (puuid) {
-      // Fallback for environments where by-summoner may not resolve as expected.
-      const byPuuidUrl = `${base}/lol/league/v4/entries/by-puuid/${encodeURIComponent(puuid)}`;
-      const byPuuidData = await riotFetch(byPuuidUrl, true);
-      const byPuuidResult = parseSoloEntry(byPuuidData);
-      if (byPuuidResult) {
-        return byPuuidResult;
-      }
+    if (normalizedPuuid) {
+      const byPuuidResult = await tryRankLookup("by-puuid", normalizedPuuid);
+      if (byPuuidResult) return byPuuidResult;
     }
 
     return null;
   } catch (err) {
-    console.error("Failed to fetch ranked solo entry:", err);
     return null;
   }
 }
@@ -575,8 +638,7 @@ export async function getFilteredMatchPage(
 
     // Fetch all matches in parallel instead of sequentially
     const summaryPromises = matchIds.map((matchId) =>
-      buildMatchSummary(region, puuid, matchId, false).catch((err) => {
-        console.error(`Failed to fetch match ${matchId}:`, err);
+      buildMatchSummary(region, puuid, matchId, false).catch(() => {
         return null;
       })
     );
@@ -628,8 +690,15 @@ export async function getAllFilteredMatchesForSeason(
   const allMatches: MatchSummaryResponse[] = [];
   let cursor = 0;
   let hasMore = true;
+  let isFirstPage = true;
 
   while (hasMore && allMatches.length < maxMatches) {
+    // Add small delay between pages to avoid overwhelming rate limit during enrichment scan
+    if (!isFirstPage) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    isFirstPage = false;
+
     const page = await getFilteredMatchPage(region, puuid, cursor, 25, filters);
     allMatches.push(...page.matches);
 
@@ -637,12 +706,6 @@ export async function getAllFilteredMatchesForSeason(
       hasMore = false;
     } else {
       cursor = page.nextOffset;
-    }
-
-    // Be gentle with Riot's rate limits when scanning many matches
-    // for background filters: add a small delay between pages.
-    if (hasMore && allMatches.length < maxMatches) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
 
@@ -653,17 +716,25 @@ export async function getFullProfile(
   gameName: string,
   tagLine: string,
   platform: string = "euw1",
+  options?: {
+    includeRankedSolo?: boolean;
+  },
 ): Promise<{
   summoner: SummonerResponse;
   matches: MatchSummaryResponse[];
-  rankedSolo: RankedSoloEntry | null;
+  rankedSolo?: RankedSoloEntry | null;
 }> {
+  const includeRankedSolo = options?.includeRankedSolo ?? false;
   const account = await getSummonerByRiotId(gameName, tagLine, platform);
   const region = platform;
   const summoner = await getSummonerByPuuid(region, account.puuid);
-  const [matches, rankedSolo] = await Promise.all([
-    getMatchSummaries(region, account.puuid, 0, 10),
-    getRankedSoloEntry(region, summoner.id, summoner.puuid),
-  ]);
+
+  const matches = await getMatchSummaries(region, account.puuid, 0, 10);
+
+  if (!includeRankedSolo) {
+    return { summoner, matches };
+  }
+
+  const rankedSolo = await getRankedSoloEntry(region, summoner.id, account.puuid);
   return { summoner, matches, rankedSolo };
 }

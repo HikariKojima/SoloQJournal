@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { browser } from "$app/environment";
+  import { SvelteSet } from "svelte/reactivity";
   import MatchCard from "$lib/components/MatchCard.svelte";
   import { profileStore } from "$lib/profile.svelte";
   import type { PageData } from "./$types";
@@ -29,10 +31,17 @@
   let currentSearchTagLine = $state("");
   let rankIconFailed = $state(false);
   let rankIconIndex = $state(0);
+  let isRankHydrating = $state(false);
+  let isLoadingInitialMatches = $state(false);
+  let rankHydrationRequestId = 0;
+  const hydratedRankPuuids = new SvelteSet<string>();
   
   // All matches loaded for filter options (lazy loaded in background)
   let allSeasonMatches = $state<MatchSummaryResponse[]>([]);
   let isLoadingFilters = $state(false);
+  
+  // Track profiles currently being enriched to prevent overlaps on rapid searches
+  const enrichmentsInProgress = new SvelteSet<string>();
 
   const regionOptions = [
     {
@@ -165,21 +174,125 @@
     return `/api/summoner?${params.toString()}`;
   }
 
+  function createProfileApiUrl(): string {
+    const params = new URLSearchParams({
+      gameName: currentSearchGameName,
+      tagLine: currentSearchTagLine,
+      platform: selectedRegion,
+    });
+
+    return `/api/profile?${params.toString()}`;
+  }
+
+  function createRankApiUrl(options: {
+    summonerId?: string;
+    puuid?: string;
+  }): string {
+    const params = new URLSearchParams({
+      platform: selectedRegion,
+    });
+
+    if (options.summonerId) params.set("summonerId", options.summonerId);
+    if (options.puuid) params.set("puuid", options.puuid);
+
+    return `/api/rank?${params.toString()}`;
+  }
+
+  function applyRankedSoloToCurrentProfile(
+    puuid: string,
+    rankedSolo: RankedSoloEntry | null,
+  ) {
+    if (searchedProfile?.summoner.puuid === puuid) {
+      searchedProfile = {
+        ...searchedProfile,
+        rankedSolo,
+      };
+    } else if (!searchedProfile && data.profileData?.summoner.puuid === puuid) {
+      searchedProfile = {
+        ...data.profileData,
+        rankedSolo,
+      };
+    }
+
+    const savedProfileIndex = profileStore.list.findIndex(
+      (profile) => profile.summoner.puuid === puuid,
+    );
+
+    if (savedProfileIndex >= 0) {
+      const savedProfile = profileStore.list[savedProfileIndex];
+      profileStore.list[savedProfileIndex] = {
+        ...savedProfile,
+        rankedSolo,
+        lastFetched: new Date().toISOString(),
+      };
+    }
+  }
+
+  async function hydrateRankedSoloInBackground(options: {
+    puuid: string;
+    summonerId?: string;
+    force?: boolean;
+  }) {
+    if (!options.puuid) {
+      return;
+    }
+    if (!browser) return;
+
+    if (!options.force && hydratedRankPuuids.has(options.puuid)) {
+      return;
+    }
+
+    hydratedRankPuuids.add(options.puuid);
+
+    const requestId = ++rankHydrationRequestId;
+    isRankHydrating = true;
+
+    try {
+      const rankUrl = createRankApiUrl({
+        summonerId: options.summonerId,
+        puuid: options.puuid,
+      });
+      const res = await fetch(rankUrl);
+      if (!res.ok) {
+        const failureBody = await res.text();
+        throw new Error(failureBody);
+      }
+
+      const payload = await res.json();
+      const rankedSolo = payload?.rankedSolo ?? null;
+
+      if (requestId !== rankHydrationRequestId) {
+        return;
+      }
+
+      applyRankedSoloToCurrentProfile(options.puuid, rankedSolo);
+    } catch {
+    } finally {
+      if (requestId === rankHydrationRequestId) {
+        isRankHydrating = false;
+      }
+    }
+  }
+
   /**
    * Load all matches for the season in the background to populate filters
    * This happens silently after the initial search completes
    */
   async function loadAllMatchesForFilters() {
     if (!currentSearchGameName || !currentSearchTagLine) return;
-    // Avoid duplicate background fetches for the same profile
-    if (isLoadingFilters || allSeasonMatches.length > 0) return;
     
-    isLoadingFilters = true;
-    try {
-      // Start this a little after the main profile/matches fetch so we
-      // don't burst the free Riot API key immediately.
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Create a unique key for this profile
+    const enrichmentKey = `${currentSearchGameName}#${currentSearchTagLine}#${selectedRegion}`;
+    
+    // Avoid duplicate/overlapping enrichments and avoid duplicate background fetches for the same profile
+    if (enrichmentsInProgress.has(enrichmentKey) || isLoadingFilters || allSeasonMatches.length > 0) {
+      return;
+    }
 
+    enrichmentsInProgress.add(enrichmentKey);
+    isLoadingFilters = true;
+    const enrichmentStartedAt = Date.now();
+    try {
       const res = await fetch(
         createSummonerApiUrl({
           all: true,
@@ -191,12 +304,72 @@
       if (!res.ok) throw new Error(await res.text());
       const response = await res.json();
       allSeasonMatches = response.matches || [];
-      debugLog(`Filters loaded: ${allSeasonMatches.length} matches fetched`);
-    } catch (err: any) {
-      console.error("Failed to load filters data:", err.message);
+    } catch {
       // Silent fail - filters will just show available loaded matches
     } finally {
       isLoadingFilters = false;
+      enrichmentsInProgress.delete(enrichmentKey);
+    }
+  }
+
+  async function loadInitialMatchesForCurrentSearch() {
+    if (!currentSearchGameName || !currentSearchTagLine) return;
+
+    // Tie this request to the active search so older responses can be ignored safely.
+    const requestSearchKey = `${currentSearchGameName}#${currentSearchTagLine}#${selectedRegion}`;
+
+    isLoadingInitialMatches = true;
+    try {
+      const res = await fetch(
+        createSummonerApiUrl({
+          offset: 0,
+          limit: PAGE_LIMIT,
+        }),
+      );
+      if (!res.ok) throw new Error(await res.text());
+
+      const payload: {
+        summoner?: NonNullable<ProfileData>["summoner"];
+        matches?: MatchSummaryResponse[];
+        nextOffset?: number;
+        hasMore?: boolean;
+      } = await res.json();
+
+      const currentSearchKey = `${currentSearchGameName}#${currentSearchTagLine}#${selectedRegion}`;
+      if (requestSearchKey !== currentSearchKey) {
+        return;
+      }
+
+      const current = searchedProfile;
+      if (!current) return;
+
+      const preservedRankedSolo = current.rankedSolo;
+
+      const updatedProfile: NonNullable<ProfileData> = {
+        ...current,
+        summoner: payload.summoner ?? current.summoner,
+        matches: payload.matches ?? [],
+        rankedSolo: preservedRankedSolo,
+      };
+
+      searchedProfile = updatedProfile;
+      nextOffset = payload.nextOffset ?? 0;
+      hasMore = payload.hasMore ?? false;
+
+      profileStore.addProfile({
+        gameName: currentSearchGameName,
+        tagLine: `#${currentSearchTagLine}`,
+        region: selectedRegion,
+        summoner: updatedProfile.summoner,
+        matches: updatedProfile.matches,
+        rankedSolo: updatedProfile.rankedSolo ?? null,
+        lastFetched: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      error = err?.message || "Failed to load matches";
+      hasMore = false;
+    } finally {
+      isLoadingInitialMatches = false;
     }
   }
 
@@ -204,9 +377,12 @@
     loading = true;
     error = "";
     searchedProfile = null;
+    rankHydrationRequestId += 1;
+    isRankHydrating = false;
+    isLoadingInitialMatches = false;
     allSeasonMatches = [];
     nextOffset = 0;
-    hasMore = true;
+    hasMore = false;
     selectedChampion = null;
     selectedOpponentChampion = null;
     try {
@@ -229,43 +405,47 @@
       // Store the search parameters used for subsequent pagination/filter requests
       currentSearchGameName = trimmedGameName;
       currentSearchTagLine = cleanTagLine;
-
-      const res = await fetch(
-        createSummonerApiUrl({
-          offset: 0,
-          limit: PAGE_LIMIT,
-        }),
-      );
-      if (!res.ok) throw new Error(await res.text());
-      const fetchedProfile:
-        | (NonNullable<ProfileData> & {
-            nextOffset?: number;
-            hasMore?: boolean;
-          })
-        | null = await res.json();
-      if (!fetchedProfile) {
+      const profileRes = await fetch(createProfileApiUrl());
+      if (!profileRes.ok) throw new Error(await profileRes.text());
+      const profilePayload: {
+        summoner?: NonNullable<ProfileData>["summoner"];
+      } = await profileRes.json();
+      if (!profilePayload?.summoner) {
         throw new Error("Profile response was empty.");
       }
-      searchedProfile = fetchedProfile;
+
+      searchedProfile = {
+        summoner: profilePayload.summoner,
+        matches: [],
+        rankedSolo: null,
+      };
 
       profileStore.addProfile({
         gameName: trimmedGameName,
         tagLine: normalizedTagLine,
         region: selectedRegion,
-        summoner: fetchedProfile.summoner,
-        matches: fetchedProfile.matches,
-        rankedSolo: fetchedProfile.rankedSolo ?? null,
+        summoner: profilePayload.summoner,
+        matches: [],
+        rankedSolo: null,
         lastFetched: new Date().toISOString(),
       });
 
       // Clear the input fields after successful fetch
       gameName = "";
       tagLine = "";
-      // Reset pagination state
-      nextOffset = fetchedProfile.nextOffset ?? 0;
-      hasMore = fetchedProfile.hasMore ?? false;
       selectedChampion = null;
       selectedOpponentChampion = null;
+
+      // End initial blocking state as soon as account profile is ready.
+      loading = false;
+
+      // Load rank first, then first match page, then full-season filters in background.
+      await hydrateRankedSoloInBackground({
+        puuid: profilePayload.summoner.puuid,
+        summonerId: profilePayload.summoner.id,
+      });
+
+      await loadInitialMatchesForCurrentSearch();
 
       // Background load all matches for comprehensive filter options (no await - fire and forget)
       void loadAllMatchesForFilters();
@@ -299,18 +479,12 @@
   }
 
   async function loadMore() {
-    debugLog(
-      `loadMore called | hasMore=${String(hasMore)} | isLoadingMore=${String(isLoadingMore)} | nextOffset=${String(nextOffset)}`,
-    );
-
     if (!currentProfile || isLoadingMore || !hasMore) {
-      debugLog("loadMore aborted due to guard condition");
       return;
     }
 
     isLoadingMore = true;
     try {
-      debugLog(`fetch start with offset=${String(nextOffset)}`);
       const res = await fetch(
         createSummonerApiUrl({
           offset: nextOffset,
@@ -321,9 +495,6 @@
 
       const response = await res.json();
       const newMatches = response.matches || [];
-      debugLog(
-        `fetch success | newMatches=${String(newMatches.length)} | response.nextOffset=${String(response.nextOffset)} | response.hasMore=${String(response.hasMore)}`,
-      );
 
       // Append new matches to existing list
       if (currentProfile.matches) {
@@ -332,15 +503,9 @@
 
       nextOffset = response.nextOffset ?? nextOffset + PAGE_LIMIT;
       hasMore = response.hasMore ?? newMatches.length >= PAGE_LIMIT;
-      debugLog(
-        `state updated | totalMatches=${String(currentProfile.matches?.length ?? 0)} | nextOffset=${String(nextOffset)} | hasMore=${String(hasMore)}`,
-      );
-    } catch (err: any) {
-      console.error("Failed to load more matches:", err.message);
-      debugLog(`fetch error | ${err.message}`);
+    } catch {
     } finally {
       isLoadingMore = false;
-      debugLog("loadMore finished");
     }
   }
 
@@ -391,6 +556,11 @@
     const candidates = rankIconCandidates(rankedSolo);
     if (!candidates.length) return null;
     return candidates[rankIconIndex] ?? null;
+  });
+
+  $effect(() => {
+    const candidates = rankIconCandidates(rankedSolo);
+    if (!rankedSolo || !candidates.length) return;
   });
 
   function handleRankIconError() {
@@ -586,15 +756,7 @@
   let hasMore = $state(true);
   let dismissed = $state(false);
   let sentinelElement = $state<HTMLElement | null>(null);
-  let debugInfiniteScroll = $state(true);
-  let debugEvents = $state<string[]>([]);
   let isMobileProfilesOpen = $state(false);
-
-  function debugLog(message: string) {
-    if (!debugInfiniteScroll) return;
-    const stamp = new Date().toLocaleTimeString();
-    debugEvents = [`${stamp} - ${message}`, ...debugEvents].slice(0, 20);
-  }
 
   function openMobileProfiles() {
     isMobileProfilesOpen = true;
@@ -619,6 +781,18 @@
     currentProfileKey;
     rankIconFailed = false;
     rankIconIndex = 0;
+  });
+
+  $effect(() => {
+    if (!browser) return;
+    if (currentSearchGameName) return;
+    const profile = currentProfile;
+    if (!profile?.summoner?.puuid || !profile?.summoner?.id) return;
+
+    void hydrateRankedSoloInBackground({
+      puuid: profile.summoner.puuid,
+      summonerId: profile.summoner.id,
+    });
   });
 
   // Reset full-season filter cache whenever the active profile changes
@@ -850,8 +1024,7 @@
             : entry,
         );
       }
-    } catch (err) {
-      console.error("Failed to fetch timeline CS stats:", err);
+    } catch {
     } finally {
       isLoadingTimelineStats = false;
     }
@@ -1024,8 +1197,7 @@
       if (stored) {
         try {
           matchReflections = JSON.parse(stored);
-        } catch (err) {
-          console.error("Failed to parse stored reflections:", err);
+        } catch {
         }
       }
       const objectives = localStorage.getItem("learningObjectives");
@@ -1036,8 +1208,7 @@
             "currentLearningObjective",
           );
           selectedObjective = resolveObjectiveSelection(storedObjective);
-        } catch (err) {
-          console.error("Failed to parse learning objectives:", err);
+        } catch {
         }
       }
     }
@@ -1053,9 +1224,6 @@
     const observer = new IntersectionObserver(
       (entries) => {
         const isIntersecting = Boolean(entries[0]?.isIntersecting);
-        debugLog(
-          `observer event | intersecting=${String(isIntersecting)} | hasMore=${String(hasMore)} | isLoadingMore=${String(isLoadingMore)}`,
-        );
         if (isIntersecting && hasMore && !isLoadingMore) {
           void loadMore();
         }
@@ -1413,7 +1581,9 @@
                 </div>
               </div>
             {:else}
-              <p class="mt-2 text-sm font-medium text-(--text-muted)">Unranked</p>
+              <p class="mt-2 text-sm font-medium text-(--text-muted)">
+                {isRankHydrating ? "Loading rank..." : "Unranked"}
+              </p>
             {/if}
           </div>
         </div>
@@ -1581,6 +1751,12 @@
 
       <!-- Matches -->
       <div class="flex flex-col gap-7 max-md:gap-4">
+        {#if isLoadingInitialMatches}
+          <div class="rounded-xl border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.5)] px-4 py-3 text-sm text-(--text-muted)">
+            Loading match history...
+          </div>
+        {/if}
+
         {#each filteredMatchDays as day (day.dateKey)}
           <section>
             <div class="mb-2 flex items-center justify-between max-md:flex-wrap max-md:items-start max-md:gap-2">
@@ -1640,42 +1816,6 @@
             Filters apply to loaded matches. Scroll down to load more and refine
             results.
           </p>
-        </div>
-      {/if}
-
-      {#if debugInfiniteScroll}
-        <div class="mt-6 p-3 rounded border border-amber-500/40 bg-black/35 text-amber-100 text-xs">
-          <div class="flex items-center justify-between gap-3 mb-2">
-            <p class="font-semibold">Infinite Scroll Debug</p>
-            <button
-              type="button"
-              class="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30"
-              onclick={() => {
-                debugEvents = [];
-              }}
-            >
-              Clear
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-            <p>hasMore: <strong>{String(hasMore)}</strong></p>
-            <p>isLoadingMore: <strong>{String(isLoadingMore)}</strong></p>
-            <p>nextOffset: <strong>{nextOffset}</strong></p>
-            <p>matches: <strong>{currentProfile.matches?.length ?? 0}</strong></p>
-            <p>sentinel: <strong>{sentinelElement ? "attached" : "missing"}</strong></p>
-            <p>filtersActive: <strong>{String(hasActiveMatchFilters)}</strong></p>
-          </div>
-
-          <div class="max-h-44 overflow-y-auto space-y-1 border-t border-amber-500/20 pt-2">
-            {#if !debugEvents.length}
-              <p class="text-amber-200/70">No events yet. Scroll down to trigger observer.</p>
-            {:else}
-              {#each debugEvents as eventLine, index (`${eventLine}-${index}`)}
-                <p class="font-mono">{eventLine}</p>
-              {/each}
-            {/if}
-          </div>
         </div>
       {/if}
 

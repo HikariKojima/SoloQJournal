@@ -33,9 +33,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
   if (gameName && tagLine) {
     try {
-      profileData = await getFullProfile(gameName, tagLine, platform);
-    } catch (err) {
-      console.error("Failed to pre-fetch profile:", err);
+      profileData = await getFullProfile(gameName, tagLine, platform, {
+        includeRankedSolo: true,
+      });
+    } catch {
       // Return null on error, let client handle
     }
   }
