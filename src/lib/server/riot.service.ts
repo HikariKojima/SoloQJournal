@@ -66,7 +66,7 @@ const PLATFORM_BASES: Record<string, string> = {
 };
 
 function getAccountBase(platform: string): string {
-  const region = getRegionalBase(platform);
+  const region = getAccountRegionalBase(platform);
   return `${region}/riot/account/v1`;
 }
 
@@ -77,16 +77,33 @@ if (!API_KEY) {
 }
 
 function getRegionalBase(platform: string): string {
-  if (["na1", "br1", "la1", "la2", "oc1"].includes(platform)) {
+  if (["na1", "br1", "la1", "la2"].includes(platform)) {
     return "https://americas.api.riotgames.com";
   }
   if (["eun1", "euw1", "tr1", "ru"].includes(platform)) {
     return "https://europe.api.riotgames.com";
   }
-  if (["jp1", "kr", "ph2", "sg2", "th2", "tw2", "vn2"].includes(platform)) {
+  if (["jp1", "kr"].includes(platform)) {
     return "https://asia.api.riotgames.com";
   }
+  if (["oc1", "ph2", "sg2", "th2", "tw2", "vn2"].includes(platform)) {
+    return "https://sea.api.riotgames.com";
+  }
   return "https://europe.api.riotgames.com"; // default
+}
+
+function getAccountRegionalBase(platform: string): string {
+  // ACCOUNT-V1 supports americas, asia, and europe routing values.
+  if (["na1", "br1", "la1", "la2"].includes(platform)) {
+    return "https://americas.api.riotgames.com";
+  }
+  if (["eun1", "euw1", "tr1", "ru"].includes(platform)) {
+    return "https://europe.api.riotgames.com";
+  }
+  if (["jp1", "kr", "oc1", "ph2", "sg2", "th2", "tw2", "vn2"].includes(platform)) {
+    return "https://asia.api.riotgames.com";
+  }
+  return "https://europe.api.riotgames.com";
 }
 
 const SOLO_DUO_QUEUE_ID = 420;
@@ -108,10 +125,11 @@ const rateLimitBuckets = new Map<string, Map<string, RateLimitBucket>>();
 
 function getRegionLimitKey(region: string): string {
   const regionalBase = getRegionalBase(region);
-  // Extract region identifier (americas, europe, asia)
+  // Extract region identifier (americas, europe, asia, sea)
   if (regionalBase.includes("americas")) return "americas";
   if (regionalBase.includes("europe")) return "europe";
   if (regionalBase.includes("asia")) return "asia";
+  if (regionalBase.includes("sea")) return "sea";
   return region;
 }
 
@@ -183,8 +201,12 @@ export type FilteredMatchesPage = {
 async function riotFetch(
   url: string,
   useCache: boolean = true,
-  maxRetries: number = 1,
+  maxRetries: number = 3,
 ): Promise<any> {
+  const isProfileRequest =
+    url.includes("/riot/account/v1/accounts/by-riot-id/") ||
+    url.includes("/lol/summoner/v4/summoners/by-puuid/");
+
   // Check cache first (skip for mutations)
   if (useCache) {
     const cached = getCached(apiCache, url);
@@ -198,6 +220,7 @@ async function riotFetch(
   if (url.includes("americas")) region = "na1";
   else if (url.includes("europe")) region = "euw1";
   else if (url.includes("asia")) region = "kr";
+  else if (url.includes("sea")) region = "oc1";
 
   // Wait for rate limit clearance before attempting request
   await waitForRateLimit(region);
@@ -214,12 +237,37 @@ async function riotFetch(
       if (res.status === 429) {
         // Rate limited - check Retry-After header
         const retryAfter = res.headers.get("Retry-After");
-        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000;
+        const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : NaN;
+        const waitTime =
+          Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+            ? retryAfterSeconds * 1000
+            : 1100;
+
+        if (isProfileRequest) {
+          console.warn("[RIOT][PROFILE][RATE_LIMIT] 429 received", {
+            attempt: attempt + 1,
+            maxAttempts: maxRetries + 1,
+            waitMs: waitTime,
+            hasRetryAfter: Boolean(retryAfter),
+            appLimit: res.headers.get("X-App-Rate-Limit"),
+            appLimitCount: res.headers.get("X-App-Rate-Limit-Count"),
+            methodLimit: res.headers.get("X-Method-Rate-Limit"),
+            methodLimitCount: res.headers.get("X-Method-Rate-Limit-Count"),
+          });
+        }
 
         if (attempt < maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, waitTime));
+          if (isProfileRequest) {
+            console.warn("[RIOT][PROFILE][RATE_LIMIT] Retrying after wait", {
+              nextAttempt: attempt + 2,
+            });
+          }
           continue; // Retry
         } else {
+          if (isProfileRequest) {
+            console.error("[RIOT][PROFILE][RATE_LIMIT] Retries exhausted");
+          }
           throw new Error("Riot API rate limit exceeded (429).");
         }
       }

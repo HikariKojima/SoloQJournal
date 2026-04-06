@@ -83,7 +83,7 @@
     {
       value: "oc1",
       label: "OCE",
-      gameNameExample: "Swiffer",
+      gameNameExample: "Coach Curtis",
       tagLineSuffix: "oc1",
     },
     {
@@ -510,6 +510,17 @@
   }
 
   const currentProfile = $derived(searchedProfile || data.profileData);
+
+  const profileDisplayName = $derived.by(() => {
+    const summonerName = currentProfile?.summoner?.name?.trim();
+    if (summonerName) return summonerName;
+
+    const fallbackGameName = currentSearchGameName.trim();
+    if (!fallbackGameName) return "Unknown Summoner";
+
+    const fallbackTag = currentSearchTagLine.trim();
+    return fallbackTag ? `${fallbackGameName}#${fallbackTag}` : fallbackGameName;
+  });
 
   const computedHistory = $derived.by(() => {
     if (!currentProfile?.matches?.length) {
@@ -1540,9 +1551,9 @@
               />
             {/if}
 
-            <div>
-              <h1 class="text-xl font-bold wrap-break-word max-sm:text-lg sm:text-2xl">{currentProfile.summoner.name}</h1>
-              <p class="text-sm sm:text-base">Level: {currentProfile.summoner.level}</p>
+            <div class="min-w-0">
+              <h1 class="text-xl font-bold leading-tight wrap-break-word max-sm:text-lg sm:text-2xl">{profileDisplayName}</h1>
+              <p class="mt-1 text-sm sm:text-base">Level: {currentProfile.summoner.level}</p>
               {#if winRate !== null}
                 <p class="text-sm sm:text-base">Match Win Rate: {winRate}%</p>
               {/if}
