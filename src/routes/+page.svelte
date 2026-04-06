@@ -1355,34 +1355,40 @@
         <X size={18} />
       </button>
     </div>
-    <ul class="space-y-2">
+    <ul class="space-y-3">
       {#each profileStore.list as profile, i (`${profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
-        <li class="flex items-start gap-2">
-          <button
-            class="flex-1 text-left p-2 rounded cursor-pointer hover:bg-gray-700 transition {i ===
-            profileStore.activeIndex
-              ? 'bg-gray-700'
-              : ''}"
-            onclick={() => {
-              profileStore.setActive(i);
-              closeMobileProfiles();
-              loadProfile(profile);
-            }}
-          >
-            <span class="break-all">{profile.gameName}{profile.tagLine}</span>
-            <span class="ml-2 text-xs sm:text-sm text-gray-400 uppercase">{profile.region}</span>
-          </button>
-          <button
-            type="button"
-            class="px-2 py-1 text-base bg-red-600 hover:bg-red-700 rounded cursor-pointer"
-            aria-label={`Delete saved profile ${profile.gameName}${profile.tagLine}`}
-            onclick={(event) => {
-              event.stopPropagation();
-              profileStore.removeProfile(i);
-            }}
-          >
-            Delete
-          </button>
+        <li class={`group rounded-xl border p-2.5 transition-colors ${
+          i === profileStore.activeIndex
+            ? "border-[#6d28d9] bg-[rgba(109,40,217,0.16)]"
+            : "border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.48)] hover:border-[rgba(148,163,184,0.45)]"
+        }`}>
+          <div class="flex items-start gap-2">
+            <button
+              class="min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 text-left transition hover:bg-[rgba(15,23,42,0.75)]"
+              onclick={() => {
+                profileStore.setActive(i);
+                closeMobileProfiles();
+                loadProfile(profile);
+              }}
+            >
+              <p class="wrap-break-word text-[1.03rem] font-semibold leading-tight text-(--text-primary)">{profile.gameName}{profile.tagLine}</p>
+              <div class="mt-1.5 flex items-center gap-2">
+                <span class="inline-flex items-center rounded-full border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.7)] px-2 py-[0.1rem] text-[0.68rem] font-medium uppercase tracking-[0.08em] text-gray-300">{profile.region}</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              class="shrink-0 rounded-md border border-[#b91c1c] bg-[#dc2626] px-2.5 py-1 text-[0.82rem] font-semibold text-white transition hover:bg-[#b91c1c]"
+              aria-label={`Delete saved profile ${profile.gameName}${profile.tagLine}`}
+              onclick={(event) => {
+                event.stopPropagation();
+                profileStore.removeProfile(i);
+              }}
+            >
+              Delete
+            </button>
+          </div>
         </li>
       {/each}
     </ul>

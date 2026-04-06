@@ -412,12 +412,27 @@ async function buildMatchSummary(
     (p: any) => p.teamId !== teamId,
   );
 
+  const playerPositionUpper = playerPosition.toUpperCase();
+  const findTeammateByPositions = (...positions: string[]) =>
+    teamParticipants.find((p: any) => {
+      if (p.puuid === puuid) return false;
+      const pos = getPosition(p).toUpperCase();
+      return positions.includes(pos);
+    }) ?? null;
+
+  // Role-based ally shown next to the player portrait:
+  // - JUNGLE -> MID
+  // - BOTTOM -> SUPPORT/UTILITY
+  // - SUPPORT/UTILITY -> BOTTOM
+  // - default (TOP/MID/others) -> JUNGLE
   const allyJunglerParticipant =
-    playerPosition === "JUNGLE"
-      ? null
-      : teamParticipants.find(
-          (p: any) => p.puuid !== puuid && getPosition(p) === "JUNGLE",
-        ) ?? null;
+    playerPositionUpper === "JUNGLE"
+      ? findTeammateByPositions("MIDDLE", "MID")
+      : playerPositionUpper === "BOTTOM" || playerPositionUpper === "BOT"
+        ? findTeammateByPositions("UTILITY", "SUPPORT")
+        : playerPositionUpper === "UTILITY" || playerPositionUpper === "SUPPORT"
+          ? findTeammateByPositions("BOTTOM", "BOT")
+          : findTeammateByPositions("JUNGLE");
   const laneOpponentParticipant =
     enemyParticipants.find((p: any) => getPosition(p) === playerPosition) ??
     (playerPosition === "JUNGLE"

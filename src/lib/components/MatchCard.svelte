@@ -244,7 +244,7 @@
             {#if allyJunglerRoleIcon}
               <img
                 src={allyJunglerRoleIcon}
-                alt="Allied jungler role"
+                alt="Allied teammate role"
                 width="14"
                 height="14"
                 class={roleIconClass}
