@@ -749,11 +749,14 @@
   let matchReflections = $state<Record<string, string>>({});
   let learningObjectiveDropdownEl = $state<HTMLElement | null>(null);
   let learningObjectiveInputEl = $state<HTMLInputElement | null>(null);
+  let learningObjectiveSearchInputEl = $state<HTMLInputElement | null>(null);
   let isLearningObjectiveOpen = $state(false);
   let learningObjectives = $state<string[]>([]);
   let learningObjectiveInput = $state("");
+  let learningObjectiveQuery = $state("");
+  let highlightedObjectiveIndex = $state(-1);
   let isAddingObjective = $state(false);
-  let selectedObjective = $state<string>("");
+  let selectedObjectives = $state<string[]>([]);
   let emotionalState = $state<string>("");
   let emotionalStateScore = $state(3);
   let objectiveExecution = $state("");
@@ -930,13 +933,227 @@
     return `${currentProfileKey}:${matchId}:${field}`;
   }
 
-  function resolveObjectiveSelection(preferred?: string | null): string {
-    if (preferred && learningObjectives.includes(preferred)) {
-      return preferred;
+  function normalizeObjectiveArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
     }
 
-    return learningObjectives.at(-1) ?? "";
+    const deduped: string[] = [];
+    for (const entry of value) {
+      if (typeof entry !== "string") continue;
+
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+
+      const exists = deduped.some(
+        (objective) => objective.toLowerCase() === trimmed.toLowerCase(),
+      );
+
+      if (!exists) {
+        deduped.push(trimmed);
+      }
+    }
+
+    return deduped;
   }
+
+  function persistSelectedLearningObjectives() {
+    localStorage.setItem(
+      "selectedLearningObjectives",
+      JSON.stringify(selectedObjectives),
+    );
+  }
+
+  function isObjectiveSelected(objective: string): boolean {
+    return selectedObjectives.includes(objective);
+  }
+
+  function clampHighlightedObjectiveIndex() {
+    const maxIndex = filteredLearningObjectives.length - 1;
+    if (maxIndex < 0) {
+      highlightedObjectiveIndex = -1;
+      return;
+    }
+
+    if (highlightedObjectiveIndex < 0 || highlightedObjectiveIndex > maxIndex) {
+      highlightedObjectiveIndex = 0;
+    }
+  }
+
+  function highlightNextObjective(step: number) {
+    const total = filteredLearningObjectives.length;
+    if (!total) {
+      highlightedObjectiveIndex = -1;
+      return;
+    }
+
+    if (highlightedObjectiveIndex === -1) {
+      highlightedObjectiveIndex = step > 0 ? 0 : total - 1;
+      return;
+    }
+
+    highlightedObjectiveIndex =
+      (highlightedObjectiveIndex + step + total) % total;
+  }
+
+  function toggleObjectiveSelection(value: string) {
+    if (!value) return;
+
+    if (selectedObjectives.includes(value)) {
+      selectedObjectives = selectedObjectives.filter(
+        (objective) => objective !== value,
+      );
+    } else {
+      selectedObjectives = [...selectedObjectives, value];
+    }
+
+    persistSelectedLearningObjectives();
+  }
+
+  function removeSelectedObjective(value: string) {
+    if (!selectedObjectives.includes(value)) return;
+
+    selectedObjectives = selectedObjectives.filter(
+      (objective) => objective !== value,
+    );
+    persistSelectedLearningObjectives();
+  }
+
+  async function openAddObjectiveMode(prefill = "") {
+    isLearningObjectiveOpen = true;
+    isAddingObjective = true;
+    learningObjectiveInput = prefill;
+    await tick();
+    learningObjectiveInputEl?.focus();
+  }
+
+  function clearSelectedObjectives() {
+    selectedObjectives = [];
+    persistSelectedLearningObjectives();
+  }
+
+  function resetLearningObjectiveUiState() {
+    learningObjectiveQuery = "";
+    highlightedObjectiveIndex = -1;
+    isAddingObjective = false;
+    learningObjectiveInput = "";
+  }
+
+  async function toggleLearningObjectiveDropdown() {
+    const nextOpen = !isLearningObjectiveOpen;
+    isLearningObjectiveOpen = nextOpen;
+
+    if (!nextOpen) {
+      resetLearningObjectiveUiState();
+      return;
+    }
+
+    learningObjectiveQuery = "";
+    isAddingObjective = false;
+    clampHighlightedObjectiveIndex();
+    await tick();
+    learningObjectiveSearchInputEl?.focus();
+  }
+
+  function handleLearningObjectiveComboboxKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      isLearningObjectiveOpen = false;
+      resetLearningObjectiveUiState();
+      return;
+    }
+
+    if (!isLearningObjectiveOpen) {
+      if (
+        event.key === "ArrowDown" ||
+        event.key === "ArrowUp" ||
+        event.key === "Enter" ||
+        event.key === " "
+      ) {
+        event.preventDefault();
+        void toggleLearningObjectiveDropdown();
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      highlightNextObjective(1);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      highlightNextObjective(-1);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      const highlighted = filteredLearningObjectives[highlightedObjectiveIndex];
+      if (!highlighted) return;
+
+      event.preventDefault();
+      toggleObjectiveSelection(highlighted);
+    }
+  }
+
+  function handleLearningObjectiveSearchKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      isLearningObjectiveOpen = false;
+      resetLearningObjectiveUiState();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      highlightNextObjective(1);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      highlightNextObjective(-1);
+      return;
+    }
+
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+
+    const highlighted = filteredLearningObjectives[highlightedObjectiveIndex];
+    if (highlighted) {
+      toggleObjectiveSelection(highlighted);
+      return;
+    }
+
+    const query = learningObjectiveQuery.trim();
+    if (!query) return;
+
+    const existing = learningObjectives.find(
+      (objective) => objective.toLowerCase() === query.toLowerCase(),
+    );
+
+    if (existing) {
+      toggleObjectiveSelection(existing);
+      return;
+    }
+
+    void openAddObjectiveMode(query);
+  }
+
+  const filteredLearningObjectives = $derived.by(() => {
+    const query = learningObjectiveQuery.trim().toLowerCase();
+    if (!query) return learningObjectives;
+
+    return learningObjectives.filter((objective) =>
+      objective.toLowerCase().includes(query),
+    );
+  });
+
+  $effect(() => {
+    filteredLearningObjectives;
+    clampHighlightedObjectiveIndex();
+  });
 
   async function openReflection(
     match: import("$lib/types").MatchSummaryResponse,
@@ -969,13 +1186,6 @@
           reflectionFieldKey(match.matchId, "emotionalReflection"),
         ) || "";
       emotionalStateScore = emotionToScore(emotionalState);
-      const storedObjective = localStorage.getItem("currentLearningObjective");
-      selectedObjective = resolveObjectiveSelection(storedObjective);
-      if (selectedObjective) {
-        localStorage.setItem("currentLearningObjective", selectedObjective);
-      } else {
-        localStorage.removeItem("currentLearningObjective");
-      }
     }
 
     if (
@@ -1054,7 +1264,7 @@
     emotionalReflection = "";
     reflectionSaved = false;
     isLearningObjectiveOpen = false;
-    isAddingObjective = false;
+    resetLearningObjectiveUiState();
   }
 
   function addLearningObjective() {
@@ -1070,63 +1280,44 @@
       : [...learningObjectives, trimmed];
 
     learningObjectives = nextObjectives;
-
     const nextSelectedObjective = existing ?? trimmed;
 
     localStorage.setItem("learningObjectives", JSON.stringify(nextObjectives));
-    selectedObjective = nextSelectedObjective;
-    localStorage.setItem("currentLearningObjective", nextSelectedObjective);
+    if (!selectedObjectives.includes(nextSelectedObjective)) {
+      selectedObjectives = [...selectedObjectives, nextSelectedObjective];
+      persistSelectedLearningObjectives();
+    }
     learningObjectiveInput = "";
     isAddingObjective = false;
+    learningObjectiveQuery = "";
+    highlightedObjectiveIndex = -1;
     isLearningObjectiveOpen = false;
   }
 
   function deleteLearningObjective(index: number) {
+    if (index < 0 || index >= learningObjectives.length) return;
+
     const removedObjective = learningObjectives[index];
     const nextObjectives = learningObjectives.filter((_, i) => i !== index);
     learningObjectives = nextObjectives;
     localStorage.setItem("learningObjectives", JSON.stringify(nextObjectives));
-    if (selectedObjective === removedObjective) {
-      selectedObjective = nextObjectives.at(-1) ?? "";
-      if (selectedObjective) {
-        localStorage.setItem("currentLearningObjective", selectedObjective);
-      } else {
-        localStorage.removeItem("currentLearningObjective");
-      }
+
+    if (removedObjective && selectedObjectives.includes(removedObjective)) {
+      selectedObjectives = selectedObjectives.filter(
+        (objective) => objective !== removedObjective,
+      );
+      persistSelectedLearningObjectives();
     }
   }
 
   async function updateObjective(value: string) {
     if (value === "__add__") {
-      selectedObjective = resolveObjectiveSelection(selectedObjective);
-      isLearningObjectiveOpen = false;
-      isAddingObjective = true;
-      learningObjectiveInput = "";
-      await tick();
-      learningObjectiveInputEl?.focus();
+      await openAddObjectiveMode(learningObjectiveQuery.trim());
       return;
     }
 
     isAddingObjective = false;
-    selectedObjective = value;
-    if (value) {
-      localStorage.setItem("currentLearningObjective", value);
-    } else {
-      localStorage.removeItem("currentLearningObjective");
-    }
-  }
-
-  function toggleLearningObjectiveDropdown() {
-    if (isAddingObjective) {
-      isAddingObjective = false;
-      learningObjectiveInput = "";
-    }
-
-    isLearningObjectiveOpen = !isLearningObjectiveOpen;
-    if (!isLearningObjectiveOpen) {
-      isAddingObjective = false;
-      learningObjectiveInput = "";
-    }
+    toggleObjectiveSelection(value);
   }
 
   function handleLearningObjectiveInputKeydown(event: KeyboardEvent) {
@@ -1214,11 +1405,22 @@
       const objectives = localStorage.getItem("learningObjectives");
       if (objectives) {
         try {
-          learningObjectives = JSON.parse(objectives);
-          const storedObjective = localStorage.getItem(
-            "currentLearningObjective",
+          learningObjectives = normalizeObjectiveArray(JSON.parse(objectives));
+        } catch {
+        }
+      }
+
+      const storedSelectedObjectives = localStorage.getItem(
+        "selectedLearningObjectives",
+      );
+      if (storedSelectedObjectives) {
+        try {
+          const parsed = normalizeObjectiveArray(
+            JSON.parse(storedSelectedObjectives),
           );
-          selectedObjective = resolveObjectiveSelection(storedObjective);
+          selectedObjectives = parsed.filter((objective) =>
+            learningObjectives.includes(objective),
+          );
         } catch {
         }
       }
@@ -1317,8 +1519,7 @@
     ) {
       if (!learningObjectiveDropdownEl.contains(target)) {
         isLearningObjectiveOpen = false;
-        isAddingObjective = false;
-        learningObjectiveInput = "";
+        resetLearningObjectiveUiState();
       }
     }
   }
@@ -2036,10 +2237,43 @@
                   type="button"
                   class="w-full px-3 py-2 rounded text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 flex items-center justify-between select-none bg-[#131620] border border-[#252b3d] text-[#e5e7eb]"
                   onclick={toggleLearningObjectiveDropdown}
+                  onkeydown={handleLearningObjectiveComboboxKeydown}
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-expanded={isLearningObjectiveOpen}
+                  aria-controls="learning-objective-listbox"
                 >
-                  <span class={selectedObjective ? "" : "text-gray-400"}
-                    >{selectedObjective || "Select an objective..."}</span
-                  >
+                  <div class="min-w-0 flex-1 flex flex-wrap items-center gap-1.5 pr-2">
+                    {#if selectedObjectives.length}
+                      {#each selectedObjectives as objective (objective)}
+                        <span
+                          class="inline-flex max-w-full items-center gap-1 rounded border border-purple-500/50 bg-purple-500/15 px-2 py-0.5 text-sm text-purple-200"
+                        >
+                          <span class="truncate">{objective}</span>
+                          <span
+                            role="button"
+                            tabindex="0"
+                            aria-label={`Remove selected objective ${objective}`}
+                            class="text-purple-300 hover:text-white leading-none"
+                            onclick={(event) => {
+                              event.stopPropagation();
+                              removeSelectedObjective(objective);
+                            }}
+                            onkeydown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ") return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              removeSelectedObjective(objective);
+                            }}
+                          >
+                            ×
+                          </span>
+                        </span>
+                      {/each}
+                    {:else}
+                      <span class="text-gray-400">Select one or more objectives...</span>
+                    {/if}
+                  </div>
                   <ChevronDown
                     size={18}
                     class={`transition-transform ${
@@ -2052,50 +2286,116 @@
                   <div
                     class="absolute left-0 right-0 mt-1 z-20 rounded border border-[#252b3d] bg-[#131620] shadow-lg"
                   >
-                    <button
-                      type="button"
-                      class="w-full text-left px-3 py-2 text-base text-gray-300 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 focus:text-purple-400"
-                      onclick={() => {
-                        updateObjective("");
-                        isLearningObjectiveOpen = false;
-                      }}
-                    >
-                      Select an objective...
-                    </button>
-
-                    {#each learningObjectives as objective, index (objective + "-" + index)}
-                      <div class="flex items-center border-t border-gray-800">
-                        <button
-                          type="button"
-                          class="flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 {selectedObjective ===
-                          objective
-                            ? 'text-white'
-                            : 'text-gray-300'}"
-                          onclick={() => {
-                            updateObjective(objective);
-                            isLearningObjectiveOpen = false;
-                          }}
-                        >
-                          {objective}
-                        </button>
-                        <button
-                          type="button"
-                          class="px-3 py-2 text-gray-400 hover:text-red-400 text-xl leading-none cursor-pointer"
-                          aria-label={`Delete objective ${objective}`}
-                          onclick={(event) => {
-                            event.stopPropagation();
-                            deleteLearningObjective(index);
-                          }}
-                        >
-                          ×
-                        </button>
+                    {#if isAddingObjective}
+                      <!-- Add New Objective Mode -->
+                      <div class="p-3 border-b border-gray-800">
+                        <div class="mb-3">
+                          <label for="learning-objective-input" class="block text-sm text-gray-400 mb-2">
+                            New Learning Objective
+                          </label>
+                          <input
+                            type="text"
+                            id="learning-objective-input"
+                            bind:this={learningObjectiveInputEl}
+                            bind:value={learningObjectiveInput}
+                            onkeydown={handleLearningObjectiveInputKeydown}
+                            placeholder="Enter new objective..."
+                            aria-label="New learning objective"
+                            class="w-full px-3 py-2 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                          />
+                        </div>
+                        <div class="flex gap-2">
+                          <button
+                            type="button"
+                            class="flex-1 px-3 py-2 rounded text-base font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 cursor-pointer"
+                            onclick={addLearningObjective}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            class="flex-1 px-3 py-2 rounded text-base font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 cursor-pointer"
+                            onclick={() => {
+                              isAddingObjective = false;
+                              learningObjectiveInput = "";
+                              learningObjectiveQuery = "";
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    {/each}
+                    {:else}
+                      <!-- List View -->
+                      <div class="border-b border-gray-800 p-2">
+                        <input
+                          type="text"
+                          bind:this={learningObjectiveSearchInputEl}
+                          bind:value={learningObjectiveQuery}
+                          onkeydown={handleLearningObjectiveSearchKeydown}
+                          placeholder="Search objectives..."
+                          aria-label="Search learning objectives"
+                          class="w-full px-3 py-2 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                        />
+                      </div>
 
-                    <div class="border-t border-gray-800">
+                      {#if selectedObjectives.length}
+                        <button
+                          type="button"
+                          class="w-full text-left px-3 py-2 text-base text-gray-300 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800"
+                          onclick={clearSelectedObjectives}
+                        >
+                          Clear selected objectives
+                        </button>
+                      {/if}
+
+                      <div
+                        id="learning-objective-listbox"
+                        role="listbox"
+                        aria-multiselectable="true"
+                      >
+                        {#if filteredLearningObjectives.length === 0}
+                          <p class="px-3 py-2 text-base text-gray-400">No objectives found.</p>
+                        {/if}
+
+                        {#each filteredLearningObjectives as objective, index (objective)}
+                          <div class="flex items-center border-t border-gray-800">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={isObjectiveSelected(objective)}
+                              class={`flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 ${isObjectiveSelected(objective)
+                                ? "text-white"
+                                : "text-gray-300"} ${highlightedObjectiveIndex === index
+                                ? "bg-gray-800"
+                                : ""}`}
+                              onclick={() => {
+                                updateObjective(objective);
+                              }}
+                            >
+                              <span class="mr-2 inline-block w-4 text-purple-400"
+                                >{isObjectiveSelected(objective) ? "✓" : ""}</span
+                              >
+                              {objective}
+                            </button>
+                            <button
+                              type="button"
+                              class="px-3 py-2 text-gray-400 hover:text-red-400 text-xl leading-none cursor-pointer"
+                              aria-label={`Delete objective ${objective}`}
+                              onclick={(event) => {
+                                event.stopPropagation();
+                                deleteLearningObjective(learningObjectives.indexOf(objective));
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        {/each}
+                      </div>
+
                       <button
                         type="button"
-                        class="w-full text-left px-3 py-2 text-base text-purple-400 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 focus:text-purple-300"
+                        class="w-full border-t border-gray-800 text-left px-3 py-2 text-base text-purple-400 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 focus:text-purple-300"
                         onclick={(event) => {
                           event.stopPropagation();
                           updateObjective("__add__");
@@ -2103,7 +2403,7 @@
                       >
                         Add new learning objective
                       </button>
-                    </div>
+                    {/if}
                   </div>
                 {/if}
 
