@@ -49,6 +49,7 @@ function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): 
 const PLATFORM_BASES: Record<string, string> = {
   na1: "https://na1.api.riotgames.com",
   br1: "https://br1.api.riotgames.com",
+  sa1: "https://sa1.api.riotgames.com",
   eun1: "https://eun1.api.riotgames.com",
   euw1: "https://euw1.api.riotgames.com",
   jp1: "https://jp1.api.riotgames.com",
@@ -77,7 +78,7 @@ if (!API_KEY) {
 }
 
 function getRegionalBase(platform: string): string {
-  if (["na1", "br1", "la1", "la2"].includes(platform)) {
+  if (["na1", "br1", "la1", "la2", "sa1"].includes(platform)) {
     return "https://americas.api.riotgames.com";
   }
   if (["eun1", "euw1", "tr1", "ru"].includes(platform)) {
@@ -94,7 +95,7 @@ function getRegionalBase(platform: string): string {
 
 function getAccountRegionalBase(platform: string): string {
   // ACCOUNT-V1 supports americas, asia, and europe routing values.
-  if (["na1", "br1", "la1", "la2"].includes(platform)) {
+  if (["na1", "br1", "la1", "la2", "sa1"].includes(platform)) {
     return "https://americas.api.riotgames.com";
   }
   if (["eun1", "euw1", "tr1", "ru"].includes(platform)) {

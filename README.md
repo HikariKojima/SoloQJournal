@@ -113,6 +113,29 @@ Open http://localhost:5173
 - Keep keys server-side only (never expose in client code)
 - Follow Riot policy before opening app publicly
 
+## Compliance Surfaces
+
+- Privacy policy route: `/privacy`
+- Terms of use route: `/terms`
+- Support route: `/support`
+- Support contact: `support@soloqjournal.dev`
+- Riot legal disclaimer is shown in the global footer
+- Analytics only starts after explicit consent
+- AI coaching requires explicit consent (`soloq:ai-consent-v1`) before data is sent to the coaching endpoint
+- Users can export and clear local browser data from the saved profiles sidebar
+
+## Riot Submission Checklist (Manual)
+
+- Register the product in Riot Developer Portal and submit for audit/approval.
+- Use one production key per product as required by Riot policy.
+- Provide reviewer screenshots for:
+   - Footer disclaimer and legal links
+   - Privacy page (`/privacy`)
+   - Terms page (`/terms`)
+   - AI consent gating before coaching
+   - Local data export and clear actions
+- Confirm support contact and response channel are active (`support@soloqjournal.dev`).
+
 ## License
 
 Educational project. Follow Riot and Google API terms when deploying.

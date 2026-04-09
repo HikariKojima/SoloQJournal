@@ -26,6 +26,7 @@
   let searchedProfile = $state<ProfileData>(null);
   let loading = $state(false);
   let error = $state("");
+  let localDataNotice = $state("");
   let tagLineError = $state("");
   let currentSearchGameName = $state("");
   let currentSearchTagLine = $state("");
@@ -771,6 +772,94 @@
   let dismissed = $state(false);
   let sentinelElement = $state<HTMLElement | null>(null);
   let isMobileProfilesOpen = $state(false);
+
+  const LOCAL_KEYS = [
+    "lol-profiles",
+    "lol-reflections",
+    "learningObjectives",
+    "selectedLearningObjectives",
+    "soloq:analytics-consent-v1",
+    "soloq:ai-consent-v1",
+  ];
+
+  function collectLocalDataSnapshot(): Record<string, unknown> {
+    const snapshot: Record<string, unknown> = {};
+
+    if (!browser || typeof localStorage === "undefined") {
+      return snapshot;
+    }
+
+    for (const key of LOCAL_KEYS) {
+      const value = localStorage.getItem(key);
+      if (value === null) continue;
+      try {
+        snapshot[key] = JSON.parse(value);
+      } catch {
+        snapshot[key] = value;
+      }
+    }
+
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("lol-coaching:")) continue;
+      snapshot[key] = localStorage.getItem(key);
+    }
+
+    return snapshot;
+  }
+
+  function exportLocalData() {
+    if (!browser) return;
+
+    const snapshot = collectLocalDataSnapshot();
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `soloqjournal-local-data-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    localDataNotice = "Local data exported successfully.";
+  }
+
+  function clearAllLocalData() {
+    if (!browser) return;
+
+    const confirmed = window.confirm(
+      "Clear all local SoloQ Journal data on this browser? This removes saved profiles, reflections, objectives, and coaching cache.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    for (const key of LOCAL_KEYS) {
+      localStorage.removeItem(key);
+    }
+
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("lol-coaching:")) continue;
+      keysToDelete.push(key);
+    }
+    for (const key of keysToDelete) {
+      localStorage.removeItem(key);
+    }
+
+    profileStore.list = [];
+    profileStore.activeIndex = 0;
+    searchedProfile = null;
+    currentSearchGameName = "";
+    currentSearchTagLine = "";
+    matchReflections = {};
+    learningObjectives = [];
+    selectedObjectives = [];
+    localDataNotice = "All local SoloQ Journal data has been cleared.";
+  }
 
   function openMobileProfiles() {
     isMobileProfilesOpen = true;
@@ -1593,6 +1682,29 @@
         </li>
       {/each}
     </ul>
+
+    <div class="mt-4 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+      <p class="text-xs uppercase tracking-[0.12em] text-slate-300">Privacy tools</p>
+      <div class="mt-2 flex flex-col gap-2">
+        <button
+          type="button"
+          class="rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700"
+          onclick={exportLocalData}
+        >
+          Export local data (JSON)
+        </button>
+        <button
+          type="button"
+          class="rounded border border-red-800 bg-red-900/55 px-2.5 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-800"
+          onclick={clearAllLocalData}
+        >
+          Clear all local data
+        </button>
+      </div>
+      {#if localDataNotice}
+        <p class="mt-2 text-xs text-slate-300">{localDataNotice}</p>
+      {/if}
+    </div>
   </aside>
 
   <!-- Main content -->
@@ -1668,6 +1780,13 @@
       {#if tagLineError}
         <p class="text-red-400 text-base mt-2">{tagLineError}</p>
       {/if}
+
+      <div class="mt-3 rounded-lg border border-slate-700 bg-slate-900/45 px-3 py-2 text-sm text-slate-200">
+        Coaching uses explicit consent before AI processing. Review
+        <a class="underline decoration-slate-400 underline-offset-2 hover:text-white" href="/privacy">Privacy</a>
+        and
+        <a class="underline decoration-slate-400 underline-offset-2 hover:text-white" href="/terms">Terms</a>.
+      </div>
     </div>
 
     {#if error}

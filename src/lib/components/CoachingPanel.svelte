@@ -16,6 +16,9 @@
   let coachingText = $state("");
   let error = $state<string | null>(null);
   let hasReviewed = $state(false);
+  let aiConsent = $state<"granted" | "denied" | null>(null);
+
+  const aiConsentStorageKey = "soloq:ai-consent-v1";
 
   const cache: Record<string, string> = {};
   const storageKey = $derived.by(
@@ -23,16 +26,38 @@
   );
 
   onMount(() => {
+    const consentValue = localStorage.getItem(aiConsentStorageKey);
+    if (consentValue === "granted" || consentValue === "denied") {
+      aiConsent = consentValue;
+    }
+
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       coachingText = saved;
       cache[match.matchId] = saved;
       hasReviewed = true;
-      return;
+      if (aiConsent !== "granted") {
+        return;
+      }
     }
 
-    void reviewGame();
+    if (aiConsent === "granted") {
+      void reviewGame();
+    }
   });
+
+  function grantAiConsent() {
+    aiConsent = "granted";
+    localStorage.setItem(aiConsentStorageKey, "granted");
+    void reviewGame();
+  }
+
+  function denyAiConsent() {
+    aiConsent = "denied";
+    localStorage.setItem(aiConsentStorageKey, "denied");
+    coachingText = "";
+    error = null;
+  }
 
   const coachingLines = $derived.by(() => {
     if (!coachingText) return [];
@@ -77,6 +102,10 @@
 
   async function reviewGame() {
     if (hasReviewed && coachingText) return;
+    if (aiConsent !== "granted") {
+      error = null;
+      return;
+    }
 
     const matchId = match.matchId;
     if (cache[matchId]) {
@@ -100,7 +129,10 @@
 
       const res = await fetch("/api/coaching", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-AI-Consent": "granted",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -135,6 +167,23 @@
 </script>
 
 <div class="coaching-panel-shell">
+  {#if aiConsent !== "granted"}
+    <div class="coaching-consent-box" role="region" aria-label="AI coaching consent">
+      <p>
+        AI coaching sends selected match stats to the coaching provider. Please grant consent to generate coaching.
+      </p>
+      <div class="coaching-consent-actions">
+        <button type="button" class="consent-primary" onclick={grantAiConsent}>
+          Enable AI coaching
+        </button>
+        <button type="button" class="consent-secondary" onclick={denyAiConsent}>
+          Keep coaching disabled
+        </button>
+        <a href="/privacy" class="consent-link">Privacy details</a>
+      </div>
+    </div>
+  {/if}
+
   {#if isLoading}
     <div class="coaching-loading-row" aria-live="polite">
       <Sparkles size={15} />
@@ -222,6 +271,51 @@
     font-weight: 600;
     color: #ddd6fe;
     animation: coaching-pulse 1.2s ease-in-out infinite;
+  }
+
+  .coaching-consent-box {
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.42);
+    background-color: rgba(15, 23, 42, 0.82);
+    padding: 0.75rem 0.85rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #dbe4f2;
+  }
+
+  .coaching-consent-actions {
+    margin-top: 0.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .consent-primary,
+  .consent-secondary {
+    border-radius: 9999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .consent-primary {
+    border: 1px solid rgba(167, 139, 250, 0.8);
+    background: rgba(91, 33, 182, 0.55);
+    color: #ede9fe;
+  }
+
+  .consent-secondary {
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    background: rgba(15, 23, 42, 0.95);
+    color: #cbd5e1;
+  }
+
+  .consent-link {
+    align-self: center;
+    color: #a5b4fc;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-size: 0.78rem;
   }
 
   .coaching-error-box {
