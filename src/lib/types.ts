@@ -30,6 +30,11 @@ export type TimelineMajorFight = {
   playerInvolved: boolean;
   playerTakedowns: number;
   playerDeaths: number;
+  objectiveContext?: {
+    objectiveType: "early" | "dragon" | "grubs" | "baron" | "herald";
+    objectiveMinute: number;
+    teamSecuredIt: boolean;
+  };
 };
 
 export type MatchTimelineInsights = {

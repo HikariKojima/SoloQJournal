@@ -344,6 +344,13 @@ function roundTo(value: number, digits: number): number {
   return Math.round(value * factor) / factor;
 }
 
+function formatMinutesSeconds(decimalMinutes: number): string {
+  const totalSeconds = Math.round(decimalMinutes * 60);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 function getMapZone(position?: { x?: number; y?: number }): string {
   const x = Number(position?.x ?? NaN);
   const y = Number(position?.y ?? NaN);
@@ -359,6 +366,97 @@ function getMapZone(position?: { x?: number; y?: number }): string {
   if (Math.abs(x - y) < 1500 && x > 4500 && x < 10500) return "mid lane/river";
   if (x < y) return "blue-side jungle";
   return "red-side jungle";
+}
+
+type ObjectiveEvent = {
+  timestamp: number;
+  type: "dragon" | "baron" | "grubs" | "herald";
+  teamId: number; // 100 = blue, 200 = red
+};
+
+function extractObjectiveEvents(frames: any[]): ObjectiveEvent[] {
+  const objectives: ObjectiveEvent[] = [];
+
+  for (const frame of frames) {
+    const events = Array.isArray(frame?.events) ? frame.events : [];
+    for (const event of events) {
+      if (event?.type === "DRAGON_KILL") {
+        objectives.push({
+          timestamp: Number(event?.timestamp),
+          type: "dragon",
+          teamId: Number(event?.killerTeamId ?? 0),
+        });
+      } else if (event?.type === "BARON_KILL") {
+        objectives.push({
+          timestamp: Number(event?.timestamp),
+          type: "baron",
+          teamId: Number(event?.killerTeamId ?? 0),
+        });
+      } else if (event?.type === "RIFT_HERALD_KILL") {
+        objectives.push({
+          timestamp: Number(event?.timestamp),
+          type: "herald",
+          teamId: Number(event?.killerTeamId ?? 0),
+        });
+      } else if (event?.type === "GRUBS_KILL") {
+        objectives.push({
+          timestamp: Number(event?.timestamp),
+          type: "grubs",
+          teamId: Number(event?.killerTeamId ?? 0),
+        });
+      }
+    }
+  }
+
+  return objectives;
+}
+
+function computeObjectiveWindows(objectives: ObjectiveEvent[]): Array<{
+  minute: number;
+  type: "early" | "dragon" | "grubs" | "baron" | "herald";
+}> {
+  const windows: Array<{ minute: number; type: "early" | "dragon" | "grubs" | "baron" | "herald" }> = [];
+
+  // Fixed anchors (Season 16 timings)
+  windows.push({ minute: 3, type: "early" });
+  windows.push({ minute: 8, type: "grubs" });
+  windows.push({ minute: 10, type: "herald" });
+  windows.push({ minute: 20, type: "baron" });
+
+  // Dragon spawns at 5:00, then every 5 minutes if secured
+  let nextDragonMinute = 5;
+  for (const obj of objectives) {
+    if (obj.type === "dragon") {
+      const dragonMinute = obj.timestamp / 60000;
+      if (dragonMinute >= nextDragonMinute - 1) {
+        // Within ~1 min of spawn window
+        windows.push({ minute: dragonMinute, type: "dragon" });
+        nextDragonMinute = dragonMinute + 5;
+      }
+    }
+  }
+
+  return windows.sort((a, b) => a.minute - b.minute);
+}
+
+function findNearestObjective(
+  fightMinute: number,
+  windows: Array<{ minute: number; type: "early" | "dragon" | "grubs" | "baron" | "herald" }>,
+): { objectiveType: "early" | "dragon" | "grubs" | "baron" | "herald"; objectiveMinute: number } | null {
+  const TOLERANCE = 1.5; // ±90 seconds
+
+  let nearest = null;
+  let nearestDistance = Infinity;
+
+  for (const window of windows) {
+    const distance = Math.abs(fightMinute - window.minute);
+    if (distance <= TOLERANCE && distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = window;
+    }
+  }
+
+  return nearest ? { objectiveType: nearest.type, objectiveMinute: nearest.minute } : null;
 }
 
 function buildMajorTeamfights(
@@ -397,6 +495,10 @@ function buildMajorTeamfights(
     return [];
   }
 
+  // Extract objective events and compute windows for tagging
+  const objectives = extractObjectiveEvents(frames);
+  const objectiveWindows = computeObjectiveWindows(objectives);
+
   killEvents.sort((a, b) => a.timestamp - b.timestamp);
   const clusters: KillEvent[][] = [];
 
@@ -416,9 +518,48 @@ function buildMajorTeamfights(
     }
   }
 
+  // Determine which team the player is on (1-5 = team A, 6-10 = team B)
+  const playerTeamIsA = participantId <= 5;
+
   return clusters
     .filter((cluster) => cluster.length >= 3)
     .map((cluster) => {
+      // Count unique champions per team to validate thresholds
+      const teamAChampions = new Set<number>();
+      const teamBChampions = new Set<number>();
+
+      for (const event of cluster) {
+        // Killer and victim always present
+        if (event.killerId <= 5) {
+          teamAChampions.add(event.killerId);
+        } else {
+          teamBChampions.add(event.killerId);
+        }
+
+        if (event.victimId <= 5) {
+          teamAChampions.add(event.victimId);
+        } else {
+          teamBChampions.add(event.victimId);
+        }
+
+        // Assisters
+        for (const assisterId of event.assistingParticipantIds) {
+          if (assisterId <= 5) {
+            teamAChampions.add(assisterId);
+          } else {
+            teamBChampions.add(assisterId);
+          }
+        }
+      }
+
+      // Require >= 3 enemy and >= 2 ally participation
+      const playerTeam = playerTeamIsA ? teamAChampions : teamBChampions;
+      const enemyTeam = playerTeamIsA ? teamBChampions : teamAChampions;
+      
+      if (playerTeam.size < 2 || enemyTeam.size < 3) {
+        return null; // Filter out this cluster
+      }
+
       const firstTs = cluster[0].timestamp;
       const lastTs = cluster[cluster.length - 1].timestamp;
 
@@ -450,8 +591,11 @@ function buildMajorTeamfights(
         (a, b) => b[1] - a[1],
       )[0]?.[0] ?? "unknown";
 
-      return {
-        startMinute: roundTo(firstTs / 60000, 1),
+      const fightStartMinute = roundTo(firstTs / 60000, 1);
+      const objectiveContext = findNearestObjective(fightStartMinute, objectiveWindows);
+
+      const result: MatchTimelineInsights["majorTeamfights"][number] = {
+        startMinute: fightStartMinute,
         endMinute: roundTo(lastTs / 60000, 1),
         killEvents: cluster.length,
         mapZone,
@@ -459,7 +603,29 @@ function buildMajorTeamfights(
         playerTakedowns,
         playerDeaths,
       };
-    });
+
+      if (objectiveContext) {
+        // Find which team secured the objective
+        const playerTeamId = playerTeamIsA ? 100 : 200;
+        let teamSecured = false;
+        for (const obj of objectives) {
+          const objMinute = roundTo(obj.timestamp / 60000, 1);
+          if (Math.abs(objMinute - objectiveContext.objectiveMinute) < 0.1) {
+            teamSecured = obj.teamId === playerTeamId;
+            break;
+          }
+        }
+
+        result.objectiveContext = {
+          objectiveType: objectiveContext.objectiveType,
+          objectiveMinute: objectiveContext.objectiveMinute,
+          teamSecuredIt: teamSecured,
+        };
+      }
+
+      return result;
+    })
+    .filter((fight) => fight !== null);
 }
 
 function buildCsDropAfterDeath(
