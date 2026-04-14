@@ -9,6 +9,7 @@
     MatchSummaryResponse,
     ProfileData,
     RankedSoloEntry,
+    SavedProfile,
   } from "$lib/types";
   import { buildHistoryStats } from "$lib/utils/coaching";
   import {
@@ -149,6 +150,49 @@
     if (!withoutHash) return null;
 
     return `#${withoutHash}`;
+  }
+
+  function normalizeProfilePart(value: string | null | undefined): string {
+    return value?.trim().toLowerCase() ?? "";
+  }
+
+  function findCachedProfile(
+    gameNameValue: string,
+    tagLineValue: string,
+    region: string,
+  ): SavedProfile | null {
+    const normalizedGameName = normalizeProfilePart(gameNameValue);
+    const normalizedTagLine = normalizeProfilePart(tagLineValue);
+    const normalizedRegion = normalizeProfilePart(region) || "euw1";
+
+    return (
+      profileStore.list.find((profile) => {
+        return (
+          normalizeProfilePart(profile.gameName) === normalizedGameName &&
+          normalizeProfilePart(profile.tagLine) === normalizedTagLine &&
+          (normalizeProfilePart(profile.region) || "euw1") === normalizedRegion
+        );
+      }) ?? null
+    );
+  }
+
+  function mergeMatchesById(
+    primary: MatchSummaryResponse[],
+    secondary: MatchSummaryResponse[],
+  ): MatchSummaryResponse[] {
+    const merged = new Map<string, MatchSummaryResponse>();
+
+    for (const match of primary) {
+      if (!match?.matchId) continue;
+      merged.set(match.matchId, match);
+    }
+
+    for (const match of secondary) {
+      if (!match?.matchId || merged.has(match.matchId)) continue;
+      merged.set(match.matchId, match);
+    }
+
+    return Array.from(merged.values());
   }
 
   function createSummonerApiUrl(options?: {
@@ -349,7 +393,9 @@
       const updatedProfile: NonNullable<ProfileData> = {
         ...current,
         summoner: payload.summoner ?? current.summoner,
-        matches: payload.matches ?? [],
+        matches: payload.matches
+          ? mergeMatchesById(payload.matches, current.matches ?? [])
+          : (current.matches ?? []),
         rankedSolo: preservedRankedSolo,
       };
 
@@ -406,6 +452,23 @@
       // Store the search parameters used for subsequent pagination/filter requests
       currentSearchGameName = trimmedGameName;
       currentSearchTagLine = cleanTagLine;
+
+      const cachedProfile = findCachedProfile(
+        trimmedGameName,
+        normalizedTagLine,
+        selectedRegion,
+      );
+
+      if (cachedProfile) {
+        searchedProfile = {
+          summoner: cachedProfile.summoner,
+          matches: cachedProfile.matches ?? [],
+          rankedSolo: cachedProfile.rankedSolo ?? null,
+        };
+        // Keep cached results visible immediately while fresh data hydrates.
+        hasMore = false;
+      }
+
       const profileRes = await fetch(createProfileApiUrl());
       if (!profileRes.ok) throw new Error(await profileRes.text());
       const profilePayload: {
@@ -415,10 +478,13 @@
         throw new Error("Profile response was empty.");
       }
 
+      const currentMatches = searchedProfile?.matches ?? [];
+      const currentRankedSolo = searchedProfile?.rankedSolo ?? null;
+
       searchedProfile = {
         summoner: profilePayload.summoner,
-        matches: [],
-        rankedSolo: null,
+        matches: currentMatches,
+        rankedSolo: currentRankedSolo,
       };
 
       profileStore.addProfile({
@@ -426,8 +492,8 @@
         tagLine: normalizedTagLine,
         region: selectedRegion,
         summoner: profilePayload.summoner,
-        matches: [],
-        rankedSolo: null,
+        matches: currentMatches,
+        rankedSolo: currentRankedSolo,
         lastFetched: new Date().toISOString(),
       });
 
