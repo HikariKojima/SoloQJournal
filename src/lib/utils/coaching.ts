@@ -18,6 +18,10 @@ export type MatchHistoryStats = {
   mostPlayedChampions: string[];
   primaryRole: string;
   recentForm: string;
+  deathTimingSamples: number;
+  recurringFirstDeathWindow: string | null;
+  recurringFirstDeathCount: number;
+  recurringFirstDeathRate: number | null;
 };
 
 export type TimelineCoachingSignals = {
@@ -104,6 +108,10 @@ export function buildHistoryStats(
       mostPlayedChampions: [],
       primaryRole: "UNKNOWN",
       recentForm: "",
+      deathTimingSamples: 0,
+      recurringFirstDeathWindow: null,
+      recurringFirstDeathCount: 0,
+      recurringFirstDeathRate: null,
     };
   }
 
@@ -120,6 +128,8 @@ export function buildHistoryStats(
   const championCounts: Record<string, number> = {};
   const roleCounts: Record<string, number> = {};
   const formParts: string[] = [];
+  const firstDeathWindowCounts: Record<string, number> = {};
+  let deathTimingSamples = 0;
 
   for (const match of historyList) {
     const durationMin =
@@ -149,6 +159,18 @@ export function buildHistoryStats(
     championCounts[match.champion] = (championCounts[match.champion] || 0) + 1;
     const role = match.playerPosition || match.playerRole || "UNKNOWN";
     roleCounts[role] = (roleCounts[role] || 0) + 1;
+
+    const deathMinutes = match.timelineInsights?.deathTimestampsMinutes;
+    if (Array.isArray(deathMinutes) && deathMinutes.length > 0) {
+      const firstDeath = deathMinutes[0];
+      if (Number.isFinite(firstDeath)) {
+        deathTimingSamples += 1;
+        const windowStart = Math.floor(firstDeath / 2) * 2;
+        const windowEnd = windowStart + 2;
+        const key = `${windowStart}-${windowEnd}`;
+        firstDeathWindowCounts[key] = (firstDeathWindowCounts[key] || 0) + 1;
+      }
+    }
   }
 
   const avgCsPerMin = totalCsPerMin / historyList.length;
@@ -174,6 +196,21 @@ export function buildHistoryStats(
   const primaryRole =
     Object.entries(roleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "UNKNOWN";
 
+  const topFirstDeathWindow = Object.entries(firstDeathWindowCounts).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
+  const recurringFirstDeathWindow =
+    topFirstDeathWindow && topFirstDeathWindow[1] >= 2
+      ? topFirstDeathWindow[0]
+      : null;
+  const recurringFirstDeathCount = recurringFirstDeathWindow
+    ? topFirstDeathWindow?.[1] || 0
+    : 0;
+  const recurringFirstDeathRate =
+    recurringFirstDeathCount > 0 && deathTimingSamples > 0
+      ? Math.round((recurringFirstDeathCount / deathTimingSamples) * 1000) / 10
+      : null;
+
   return {
     sampleSize: historyList.length,
     avgCsPerMin: Math.round(avgCsPerMin * 100) / 100,
@@ -186,6 +223,10 @@ export function buildHistoryStats(
     mostPlayedChampions,
     primaryRole,
     recentForm: formParts.join(" "),
+    deathTimingSamples,
+    recurringFirstDeathWindow,
+    recurringFirstDeathCount,
+    recurringFirstDeathRate,
   };
 }
 

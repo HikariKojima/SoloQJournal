@@ -2179,6 +2179,7 @@
                 <MatchCard
                   {match}
                   history={computedHistory}
+                  recentMatches={currentProfile.matches}
                   playerPuuid={currentProfile.summoner.puuid}
                   leagueEntry={currentLeagueEntry}
                   hasReflection={!!getReflection(match)}

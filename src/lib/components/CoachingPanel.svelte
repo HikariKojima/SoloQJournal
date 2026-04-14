@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Sparkles } from "lucide-svelte";
-  import { buildCoachingPayload } from "$lib/utils/coaching";
+  import { buildCoachingPayload, buildHistoryStats } from "$lib/utils/coaching";
   import type { MatchSummaryResponse } from "$lib/types";
   import type {
     LeagueEntry,
@@ -9,9 +9,17 @@
     TimelineCoachingSignals,
   } from "$lib/utils/coaching";
 
-  const { match, history, playerPuuid, leagueEntry, learningObjectives = [] } = $props<{
+  const {
+    match,
+    history,
+    recentMatches = [],
+    playerPuuid,
+    leagueEntry,
+    learningObjectives = [],
+  } = $props<{
     match: MatchSummaryResponse;
     history: MatchHistoryStats;
+    recentMatches?: MatchSummaryResponse[];
     playerPuuid: string;
     leagueEntry: LeagueEntry | null;
     learningObjectives?: string[];
@@ -162,6 +170,66 @@
     };
   }
 
+  function platformFromMatchId(matchId: string): string {
+    return matchId?.split("_")[0]?.toLowerCase() || inferredPlatform;
+  }
+
+  async function enrichRecentMatchesForPattern(
+    sourceMatches: MatchSummaryResponse[],
+  ): Promise<MatchSummaryResponse[]> {
+    if (!sourceMatches.length) return [];
+
+    const limited = sourceMatches.slice(0, 6);
+
+    const enriched = await Promise.all(
+      limited.map(async (entry) => {
+        const hasTimeline =
+          Array.isArray(entry.timelineInsights?.deathTimestampsMinutes) &&
+          entry.timelineInsights!.deathTimestampsMinutes.length > 0;
+
+        if (hasTimeline) {
+          return entry;
+        }
+
+        try {
+          const params = new URLSearchParams({
+            matchId: entry.matchId,
+            puuid: playerPuuid,
+            platform: platformFromMatchId(entry.matchId),
+          });
+
+          const res = await fetch(`/api/match?${params.toString()}`);
+          if (!res.ok) return entry;
+
+          const payload = await res.json();
+          const timeline = payload?.timeline;
+          if (!timeline) return entry;
+
+          return {
+            ...entry,
+            timelineInsights: {
+              deathTimestampsMs: [],
+              deathTimestampsMinutes: Array.isArray(timeline.deathTimestampsMinutes)
+                ? timeline.deathTimestampsMinutes
+                : [],
+              csDropAfterDeaths: Array.isArray(timeline.csDropAfterDeaths)
+                ? timeline.csDropAfterDeaths
+                : [],
+              biggestCsDropWindow: timeline.biggestCsDropWindow ?? null,
+              majorTeamfights: Array.isArray(timeline.majorTeamfights)
+                ? timeline.majorTeamfights
+                : [],
+            },
+          } satisfies MatchSummaryResponse;
+        } catch {
+          return entry;
+        }
+      }),
+    );
+
+    return enriched;
+  }
+
   async function reviewGame() {
     if (hasReviewed && coachingText) return;
     if (aiConsent !== "granted") {
@@ -182,15 +250,27 @@
 
     try {
       const timelineSignals = await getTimelineSignalsForCoaching();
+      const matchesForHistory =
+        recentMatches.length > 0 ? recentMatches : [match];
+      const enrichedHistoryMatches = await enrichRecentMatchesForPattern(
+        matchesForHistory,
+      );
+      const computedPatternHistory = buildHistoryStats(
+        enrichedHistoryMatches,
+        playerPuuid,
+      );
+
       const payload = buildCoachingPayload(
         match,
         playerPuuid,
-        [match],
+        enrichedHistoryMatches,
         leagueEntry,
         timelineSignals,
         learningObjectives,
       );
-      payload.history = history;
+      payload.history = computedPatternHistory.sampleSize
+        ? computedPatternHistory
+        : history;
 
       const res = await fetch("/api/coaching", {
         method: "POST",

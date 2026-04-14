@@ -13,6 +13,7 @@
   let {
     match,
     history,
+    recentMatches = [],
     playerPuuid,
     leagueEntry,
     onMatchSelect,
@@ -21,6 +22,7 @@
   }: {
     match: MatchSummaryResponse;
     history: MatchHistoryStats;
+    recentMatches?: MatchSummaryResponse[];
     playerPuuid: string;
     leagueEntry: LeagueEntry | null;
     onMatchSelect?: (match: MatchSummaryResponse) => void;
@@ -436,7 +438,7 @@
       class="rounded-xl border border-[rgba(15,23,42,0.9)] bg-[#020617] px-[1.05rem] py-[0.9rem]"
       transition:slide={{ duration: 150 }}
     >
-      <CoachingPanel {match} {history} {playerPuuid} {leagueEntry} {learningObjectives} />
+      <CoachingPanel {match} {history} {recentMatches} {playerPuuid} {leagueEntry} {learningObjectives} />
     </div>
   {/if}
 </div>
