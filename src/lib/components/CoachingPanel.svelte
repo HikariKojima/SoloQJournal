@@ -113,7 +113,8 @@
     const matchTimeline = match.timelineInsights;
     const hasInMemorySignals =
       Array.isArray(matchTimeline?.deathTimestampsMinutes) &&
-      Array.isArray(matchTimeline?.csDropAfterDeaths);
+      Array.isArray(matchTimeline?.csDropAfterDeaths) &&
+      Array.isArray(matchTimeline?.majorTeamfights);
 
     if (hasInMemorySignals) {
       return {
@@ -124,6 +125,7 @@
         deathTimestampsMinutes: matchTimeline?.deathTimestampsMinutes ?? [],
         csDropAfterDeaths: matchTimeline?.csDropAfterDeaths ?? [],
         biggestCsDropWindow: matchTimeline?.biggestCsDropWindow ?? null,
+        majorTeamfights: matchTimeline?.majorTeamfights ?? [],
       };
     }
 
@@ -153,6 +155,9 @@
         ? timeline.csDropAfterDeaths
         : [],
       biggestCsDropWindow: timeline.biggestCsDropWindow ?? null,
+      majorTeamfights: Array.isArray(timeline.majorTeamfights)
+        ? timeline.majorTeamfights
+        : [],
     };
   }
 

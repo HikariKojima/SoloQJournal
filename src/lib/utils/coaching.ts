@@ -35,6 +35,15 @@ export type TimelineCoachingSignals = {
     endMinute: number;
     dropPerMin: number;
   } | null;
+  majorTeamfights: Array<{
+    startMinute: number;
+    endMinute: number;
+    killEvents: number;
+    mapZone: string;
+    playerInvolved: boolean;
+    playerTakedowns: number;
+    playerDeaths: number;
+  }>;
 };
 
 export type CoachingPayload = {
@@ -53,6 +62,7 @@ export type CoachingPayload = {
     deathTimestampsMinutes: number[];
     csDropAfterDeaths: TimelineCoachingSignals["csDropAfterDeaths"];
     biggestCsDropWindow: TimelineCoachingSignals["biggestCsDropWindow"];
+    majorTeamfights: TimelineCoachingSignals["majorTeamfights"];
     damageDealt: number | null;
     damageShare: number | null;
     damageTaken: number | null;
@@ -213,6 +223,7 @@ export function buildCoachingPayload(
   const deathTimestampsMinutes = timelineSignals?.deathTimestampsMinutes ?? [];
   const csDropAfterDeaths = timelineSignals?.csDropAfterDeaths ?? [];
   const biggestCsDropWindow = timelineSignals?.biggestCsDropWindow ?? null;
+  const majorTeamfights = timelineSignals?.majorTeamfights ?? [];
 
   const history = buildHistoryStats(recentMatches, viewerPuuid);
 
@@ -236,11 +247,15 @@ export function buildCoachingPayload(
       deathTimestampsMinutes,
       csDropAfterDeaths,
       biggestCsDropWindow,
+      majorTeamfights,
       damageDealt:
         typeof (match as any).damageToChamps === "number"
           ? (match as any).damageToChamps
           : null,
-      damageShare: null,
+      damageShare:
+        typeof (match as any).damageShare === "number"
+          ? (match as any).damageShare
+          : null,
       damageTaken: null,
       goldEarned: match.stats.gold,
       goldDiff15: null,

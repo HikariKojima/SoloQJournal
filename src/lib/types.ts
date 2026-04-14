@@ -22,6 +22,16 @@ export type TimelineCsDropAfterDeath = {
   dropPerMin: number | null;
 };
 
+export type TimelineMajorFight = {
+  startMinute: number;
+  endMinute: number;
+  killEvents: number;
+  mapZone: string;
+  playerInvolved: boolean;
+  playerTakedowns: number;
+  playerDeaths: number;
+};
+
 export type MatchTimelineInsights = {
   deathTimestampsMs: number[];
   deathTimestampsMinutes: number[];
@@ -31,6 +41,7 @@ export type MatchTimelineInsights = {
     endMinute: number;
     dropPerMin: number;
   } | null;
+  majorTeamfights: TimelineMajorFight[];
 };
 
 export type MatchSummaryResponse = {
@@ -78,6 +89,8 @@ export type MatchSummaryResponse = {
   } | null;
   /** Total damage dealt to champions, for DPM calculations */
   damageToChamps?: number;
+  /** Share of team champion damage, as percent */
+  damageShare?: number;
   /** When the game ended, in milliseconds since epoch */
   playedAt?: number;
   /** Queue identifier (e.g., 420 Solo/Duo) */

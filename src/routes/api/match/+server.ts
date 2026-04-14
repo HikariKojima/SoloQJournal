@@ -66,6 +66,7 @@ export async function GET({ url, request, getClientAddress }: RequestEvent) {
         deathTimestampsMinutes: match.timelineInsights?.deathTimestampsMinutes ?? [],
         csDropAfterDeaths: match.timelineInsights?.csDropAfterDeaths ?? [],
         biggestCsDropWindow: match.timelineInsights?.biggestCsDropWindow ?? null,
+        majorTeamfights: match.timelineInsights?.majorTeamfights ?? [],
       },
     }, {
       headers: rateLimitHeaders,

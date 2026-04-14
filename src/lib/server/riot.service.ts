@@ -344,6 +344,124 @@ function roundTo(value: number, digits: number): number {
   return Math.round(value * factor) / factor;
 }
 
+function getMapZone(position?: { x?: number; y?: number }): string {
+  const x = Number(position?.x ?? NaN);
+  const y = Number(position?.y ?? NaN);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return "unknown";
+  }
+
+  // Simple map buckets to keep teamfight locations readable in coaching output.
+  if (x < 4500 && y < 4500) return "blue base side";
+  if (x > 11000 && y > 11000) return "red base side";
+  if (x > 9000 && y < 7200) return "dragon side river";
+  if (x < 7200 && y > 9000) return "baron side river";
+  if (Math.abs(x - y) < 1500 && x > 4500 && x < 10500) return "mid lane/river";
+  if (x < y) return "blue-side jungle";
+  return "red-side jungle";
+}
+
+function buildMajorTeamfights(
+  frames: any[],
+  participantId: number,
+): MatchTimelineInsights["majorTeamfights"] {
+  type KillEvent = {
+    timestamp: number;
+    killerId: number;
+    victimId: number;
+    assistingParticipantIds: number[];
+    position?: { x?: number; y?: number };
+  };
+
+  const killEvents: KillEvent[] = [];
+  for (const frame of frames) {
+    const events = Array.isArray(frame?.events) ? frame.events : [];
+    for (const event of events) {
+      if (event?.type !== "CHAMPION_KILL") continue;
+      const timestamp = Number(event?.timestamp);
+      if (!Number.isFinite(timestamp)) continue;
+
+      killEvents.push({
+        timestamp,
+        killerId: Number(event?.killerId ?? 0),
+        victimId: Number(event?.victimId ?? 0),
+        assistingParticipantIds: Array.isArray(event?.assistingParticipantIds)
+          ? event.assistingParticipantIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id))
+          : [],
+        position: event?.position,
+      });
+    }
+  }
+
+  if (!killEvents.length) {
+    return [];
+  }
+
+  killEvents.sort((a, b) => a.timestamp - b.timestamp);
+  const clusters: KillEvent[][] = [];
+
+  for (const event of killEvents) {
+    const lastCluster = clusters[clusters.length - 1];
+    if (!lastCluster) {
+      clusters.push([event]);
+      continue;
+    }
+
+    const previous = lastCluster[lastCluster.length - 1];
+    const withinWindow = event.timestamp - previous.timestamp <= 20_000;
+    if (withinWindow) {
+      lastCluster.push(event);
+    } else {
+      clusters.push([event]);
+    }
+  }
+
+  return clusters
+    .filter((cluster) => cluster.length >= 3)
+    .map((cluster) => {
+      const firstTs = cluster[0].timestamp;
+      const lastTs = cluster[cluster.length - 1].timestamp;
+
+      const mapZoneVotes = new Map<string, number>();
+      let playerTakedowns = 0;
+      let playerDeaths = 0;
+      let playerInvolved = false;
+
+      for (const event of cluster) {
+        const zone = getMapZone(event.position);
+        mapZoneVotes.set(zone, (mapZoneVotes.get(zone) ?? 0) + 1);
+
+        const assisted = event.assistingParticipantIds.includes(participantId);
+        const killed = event.killerId === participantId;
+        const died = event.victimId === participantId;
+
+        if (killed || assisted || died) {
+          playerInvolved = true;
+        }
+        if (killed || assisted) {
+          playerTakedowns += 1;
+        }
+        if (died) {
+          playerDeaths += 1;
+        }
+      }
+
+      const mapZone = Array.from(mapZoneVotes.entries()).sort(
+        (a, b) => b[1] - a[1],
+      )[0]?.[0] ?? "unknown";
+
+      return {
+        startMinute: roundTo(firstTs / 60000, 1),
+        endMinute: roundTo(lastTs / 60000, 1),
+        killEvents: cluster.length,
+        mapZone,
+        playerInvolved,
+        playerTakedowns,
+        playerDeaths,
+      };
+    });
+}
+
 function buildCsDropAfterDeath(
   frames: any[],
   deathTimestampsMs: number[],
@@ -503,6 +621,7 @@ async function getTimelineInsights(
         deathTimestampsMinutes: [],
         csDropAfterDeaths: [],
         biggestCsDropWindow: null,
+        majorTeamfights: [],
       };
     }
 
@@ -546,6 +665,7 @@ async function getTimelineInsights(
         participantId,
       ),
       biggestCsDropWindow: getBiggestCsDropWindow(frames, participantId),
+      majorTeamfights: buildMajorTeamfights(frames, participantId),
     };
 
     setCached(timelineCache, cacheKey, timelineInsights);
@@ -556,6 +676,7 @@ async function getTimelineInsights(
       deathTimestampsMinutes: [],
       csDropAfterDeaths: [],
       biggestCsDropWindow: null,
+      majorTeamfights: [],
     };
   }
 }
@@ -641,6 +762,14 @@ async function buildMatchSummary(
   );
 
   const damageToChamps = participant.totalDamageDealtToChampions;
+  const teamDamageToChamps = teamParticipants.reduce(
+    (sum: number, p: any) => sum + Number(p.totalDamageDealtToChampions ?? 0),
+    0,
+  );
+  const damageShare =
+    teamDamageToChamps > 0
+      ? roundTo((damageToChamps / teamDamageToChamps) * 100, 2)
+      : undefined;
   const playedAt = data.info.gameEndTimestamp ?? data.info.gameStartTimestamp ?? null;
 
   const kda = {
@@ -680,6 +809,7 @@ async function buildMatchSummary(
     laneOpponent: toContextParticipant(laneOpponentParticipant),
     enemyJungler: toContextParticipant(enemyJunglerParticipant),
     damageToChamps,
+    damageShare,
     playedAt: typeof playedAt === "number" ? playedAt : undefined,
     queueId: data.info.queueId,
     items: [
@@ -848,6 +978,7 @@ export async function getMatchDetails(
       deathTimestampsMinutes: fullInsights.deathTimestampsMinutes,
       csDropAfterDeaths: fullInsights.csDropAfterDeaths,
       biggestCsDropWindow: fullInsights.biggestCsDropWindow,
+      majorTeamfights: fullInsights.majorTeamfights,
     };
   }
 
