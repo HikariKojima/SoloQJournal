@@ -17,6 +17,7 @@
     leagueEntry,
     onMatchSelect,
     hasReflection = false,
+    learningObjectives = [],
   }: {
     match: MatchSummaryResponse;
     history: MatchHistoryStats;
@@ -24,6 +25,7 @@
     leagueEntry: LeagueEntry | null;
     onMatchSelect?: (match: MatchSummaryResponse) => void;
     hasReflection?: boolean;
+    learningObjectives?: string[];
   } = $props();
 
   let showCoaching = $state(false);
@@ -434,7 +436,7 @@
       class="rounded-xl border border-[rgba(15,23,42,0.9)] bg-[#020617] px-[1.05rem] py-[0.9rem]"
       transition:slide={{ duration: 150 }}
     >
-      <CoachingPanel {match} {history} {playerPuuid} {leagueEntry} />
+      <CoachingPanel {match} {history} {playerPuuid} {leagueEntry} {learningObjectives} />
     </div>
   {/if}
 </div>

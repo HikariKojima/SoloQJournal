@@ -9,11 +9,12 @@
     TimelineCoachingSignals,
   } from "$lib/utils/coaching";
 
-  const { match, history, playerPuuid, leagueEntry } = $props<{
+  const { match, history, playerPuuid, leagueEntry, learningObjectives = [] } = $props<{
     match: MatchSummaryResponse;
     history: MatchHistoryStats;
     playerPuuid: string;
     leagueEntry: LeagueEntry | null;
+    learningObjectives?: string[];
   }>();
 
   const inferredPlatform = $derived.by(() => {
@@ -187,6 +188,7 @@
         [match],
         leagueEntry,
         timelineSignals,
+        learningObjectives,
       );
       payload.history = history;
 
@@ -312,13 +314,15 @@
 <style>
   .coaching-panel-shell {
     margin-top: 0.2rem;
+    width: 100%;
+    max-width: none;
     border-radius: 14px;
     border: 1px solid rgba(167, 139, 250, 0.4);
     background:
       radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 46%),
       radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 42%),
       #050b1b;
-    padding: 0.95rem 1rem;
+    padding: 1.15rem 1.25rem;
     box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62);
   }
 
@@ -396,9 +400,9 @@
     border-radius: 12px;
     border: 1px solid rgba(99, 102, 241, 0.34);
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.94));
-    padding: 0.78rem 0.9rem;
+    padding: 0.95rem 1rem;
     color: #e2e8f0;
-    max-width: 72ch;
+    max-width: none;
   }
 
   @keyframes coaching-pulse {
@@ -456,7 +460,7 @@
 
   @media (max-width: 640px) {
     .coaching-panel-shell {
-      padding: 0.8rem 0.78rem;
+      padding: 0.88rem 0.82rem;
     }
 
     .coaching-loading-row {
@@ -466,7 +470,7 @@
     }
 
     .coaching-output {
-      padding: 0.7rem 0.72rem;
+      padding: 0.78rem 0.78rem;
       margin-top: 0.6rem;
     }
 

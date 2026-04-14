@@ -84,6 +84,7 @@ export type CoachingPayload = {
     lp: number;
     summonerName: string;
   };
+  learningObjectives?: string[];
 };
 
 export function buildHistoryStats(
@@ -194,6 +195,7 @@ export function buildCoachingPayload(
   recentMatches: MatchSummaryResponse[],
   leagueEntry: LeagueEntry | null,
   timelineSignals?: TimelineCoachingSignals,
+  learningObjectives?: string[],
 ): CoachingPayload {
   const gameDurationMinutes =
     match.durationSeconds > 0
@@ -278,6 +280,7 @@ export function buildCoachingPayload(
       lp: contextLp,
       summonerName: (match as any).summonerName || "Unknown",
     },
+    ...(learningObjectives?.length && { learningObjectives }),
   };
 
   return payload;

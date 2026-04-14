@@ -2182,6 +2182,7 @@
                   playerPuuid={currentProfile.summoner.puuid}
                   leagueEntry={currentLeagueEntry}
                   hasReflection={!!getReflection(match)}
+                  learningObjectives={selectedObjectives}
                   onMatchSelect={openReflection}
                 />
               {/each}
@@ -2409,12 +2410,65 @@
               </div>
             </div>
 
-            <!-- Learning Objective Dropdown (Persistent) -->
+            <!-- Emotional State Slider (Per Match) - NOW FIRST -->
+            <div class="mb-4">
+              <label
+                for="emotional-state-slider"
+                class="block text-base font-semibold text-gray-300 mb-2"
+                >How did I feel? ({emotionalState || scoreToEmotion(emotionalStateScore)})</label
+              >
+              <input
+                id="emotional-state-slider"
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={emotionalStateScore}
+                oninput={(e) =>
+                  updateEmotionalStateFromSlider(
+                    Number((e.target as HTMLInputElement).value),
+                  )}
+                class="w-full accent-purple-500"
+              />
+              <div class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-gray-400">
+                {#each emotionScale as emotion (emotion.score)}
+                  <button
+                    type="button"
+                    class={`rounded px-2 py-1 border transition ${emotion.score === emotionalStateScore ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-gray-700 hover:border-gray-500"}`}
+                    onclick={() => updateEmotionalStateFromSlider(emotion.score)}
+                  >
+                    <span>{emotion.score}. {emotion.value}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <!-- Emotional Reflection - SECOND -->
+            <div class="mb-4">
+              <label
+                for="emotional-reflection"
+                class="block text-base font-semibold text-gray-300 mb-2"
+                >Why did I play that way based on how I felt?</label
+              >
+              <textarea
+                id="emotional-reflection"
+                bind:value={emotionalReflection}
+                onblur={() =>
+                  autoSaveReflectionField(
+                    "emotionalReflection",
+                    emotionalReflection,
+                  )}
+                class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
+                placeholder="Your thoughts..."
+              ></textarea>
+            </div>
+
+            <!-- Learning Objective Dropdown (Persistent) - NOW THIRD -->
             <div class="mb-4">
               <label
                 for="learning-objective"
                 class="block text-base font-semibold text-gray-300 mb-2"
-                >Current Learning Objective</label
+                >My Learning Objective</label
               >
               <div class="relative" bind:this={learningObjectiveDropdownEl}>
                 <button
@@ -2633,7 +2687,7 @@
               <label
                 for="objective-execution"
                 class="block text-base font-semibold text-gray-300 mb-2"
-                >Do you believe you executed on the objective?</label
+                >Did I execute on my learning objective?</label
               >
               <textarea
                 id="objective-execution"
@@ -2648,39 +2702,6 @@
               ></textarea>
             </div>
 
-            <!-- Emotional State Slider (Per Match) -->
-            <div class="mb-4">
-              <label
-                for="emotional-state-slider"
-                class="block text-base font-semibold text-gray-300 mb-2"
-                >How do you feel? ({emotionalState || scoreToEmotion(emotionalStateScore)})</label
-              >
-              <input
-                id="emotional-state-slider"
-                type="range"
-                min="1"
-                max="5"
-                step="1"
-                value={emotionalStateScore}
-                oninput={(e) =>
-                  updateEmotionalStateFromSlider(
-                    Number((e.target as HTMLInputElement).value),
-                  )}
-                class="w-full accent-purple-500"
-              />
-              <div class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-gray-400">
-                {#each emotionScale as emotion (emotion.score)}
-                  <button
-                    type="button"
-                    class={`rounded px-2 py-1 border transition ${emotion.score === emotionalStateScore ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-gray-700 hover:border-gray-500"}`}
-                    onclick={() => updateEmotionalStateFromSlider(emotion.score)}
-                  >
-                    <span>{emotion.score}. {emotion.value}</span>
-                  </button>
-                {/each}
-              </div>
-            </div>
-
             <!-- Reflection Questions -->
             <div class="space-y-3 mb-4">
               <!-- What went well -->
@@ -2688,7 +2709,7 @@
                 <label
                   for="went-well"
                   class="block text-base font-semibold text-gray-300 mb-2"
-                  >What did you do well?</label
+                  >What did I do well?</label
                 >
                 <textarea
                   id="went-well"
@@ -2704,33 +2725,12 @@
                 <label
                   for="went-bad"
                   class="block text-base font-semibold text-gray-300 mb-2"
-                  >What could you have done better?</label
+                  >What could I have done better?</label
                 >
                 <textarea
                   id="went-bad"
                   bind:value={wentBad}
                   onblur={() => autoSaveReflectionField("wentBad", wentBad)}
-                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
-                  placeholder="Your thoughts..."
-                ></textarea>
-              </div>
-
-              <!-- Emotional Reflection -->
-              <div>
-                <label
-                  for="emotional-reflection"
-                  class="block text-base font-semibold text-gray-300 mb-2"
-                  >Emotional reflection — based on how you felt, why do you
-                  think you played that way?</label
-                >
-                <textarea
-                  id="emotional-reflection"
-                  bind:value={emotionalReflection}
-                  onblur={() =>
-                    autoSaveReflectionField(
-                      "emotionalReflection",
-                      emotionalReflection,
-                    )}
                   class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
                   placeholder="Your thoughts..."
                 ></textarea>
