@@ -15,6 +15,24 @@ export type SummonerResponse = {
   level: number;
 };
 
+export type TimelineCsDropAfterDeath = {
+  deathMinute: number;
+  preDeathCsPerMin: number | null;
+  postDeathCsPerMin: number | null;
+  dropPerMin: number | null;
+};
+
+export type MatchTimelineInsights = {
+  deathTimestampsMs: number[];
+  deathTimestampsMinutes: number[];
+  csDropAfterDeaths: TimelineCsDropAfterDeath[];
+  biggestCsDropWindow: {
+    startMinute: number;
+    endMinute: number;
+    dropPerMin: number;
+  } | null;
+};
+
 export type MatchSummaryResponse = {
   matchId: string;
   champion: string;
@@ -69,6 +87,7 @@ export type MatchSummaryResponse = {
     primary: number;
     secondary: number;
   };
+  timelineInsights?: MatchTimelineInsights;
 };
 
 export type MatchDetailsResponse = {
@@ -94,6 +113,7 @@ export type MatchDetailsResponse = {
     queueId?: number;
     gameMode?: string;
   };
+  timelineInsights?: MatchTimelineInsights;
 };
 
 export type AnalyzePayload = {

@@ -9,17 +9,32 @@ export type LeagueEntry = {
 export type MatchHistoryStats = {
   sampleSize: number;
   avgCsPerMin: number;
-  avgVisionScore: number;
   avgKillParticipation: number;
   avgDeaths: number;
   winRate: number;
   belowAvgCsGames: number;
-  lowVisionGames: number;
   lowKpGames: number;
   highDeathGames: number;
   mostPlayedChampions: string[];
   primaryRole: string;
   recentForm: string;
+};
+
+export type TimelineCoachingSignals = {
+  csAt10: number | null;
+  csAt20: number | null;
+  deathTimestampsMinutes: number[];
+  csDropAfterDeaths: Array<{
+    deathMinute: number;
+    preDeathCsPerMin: number | null;
+    postDeathCsPerMin: number | null;
+    dropPerMin: number | null;
+  }>;
+  biggestCsDropWindow: {
+    startMinute: number;
+    endMinute: number;
+    dropPerMin: number;
+  } | null;
 };
 
 export type CoachingPayload = {
@@ -32,10 +47,12 @@ export type CoachingPayload = {
     assists: number;
     csTotal: number;
     csPerMin: number;
+    csAt10: number | null;
+    csAt20: number | null;
     csVsOpponent: number | null;
-    visionScore: number;
-    wardsPlaced: number | null;
-    wardsDestroyed: number | null;
+    deathTimestampsMinutes: number[];
+    csDropAfterDeaths: TimelineCoachingSignals["csDropAfterDeaths"];
+    biggestCsDropWindow: TimelineCoachingSignals["biggestCsDropWindow"];
     damageDealt: number | null;
     damageShare: number | null;
     damageTaken: number | null;
@@ -67,12 +84,10 @@ export function buildHistoryStats(
     return {
       sampleSize: 0,
       avgCsPerMin: 0,
-      avgVisionScore: 0,
       avgKillParticipation: 0,
       avgDeaths: 0,
       winRate: 0,
       belowAvgCsGames: 0,
-      lowVisionGames: 0,
       lowKpGames: 0,
       highDeathGames: 0,
       mostPlayedChampions: [],
@@ -83,13 +98,11 @@ export function buildHistoryStats(
 
   const historyList = matches.slice(0, 10);
   let totalCsPerMin = 0;
-  let totalVision = 0;
   let totalKP = 0;
   let totalDeaths = 0;
   let wins = 0;
 
   const csPerMinValues: number[] = [];
-  const visionValues: number[] = [];
   const kpValues: number[] = [];
   const deathValues: number[] = [];
 
@@ -102,11 +115,9 @@ export function buildHistoryStats(
       match.durationSeconds > 0 ? match.durationSeconds / 60 : 1;
     const csPerMin = match.stats.cs / durationMin;
     csPerMinValues.push(csPerMin);
-    visionValues.push(match.stats.visionScore);
     deathValues.push(match.kda.deaths);
 
     totalCsPerMin += csPerMin;
-    totalVision += match.stats.visionScore;
     totalDeaths += match.kda.deaths;
 
     if (match.teamKills > 0) {
@@ -130,16 +141,12 @@ export function buildHistoryStats(
   }
 
   const avgCsPerMin = totalCsPerMin / historyList.length;
-  const avgVisionScore = totalVision / historyList.length;
   const avgKillParticipation = totalKP / historyList.length;
   const avgDeaths = totalDeaths / historyList.length;
   const winRate = (wins / historyList.length) * 100;
 
   const belowAvgCsGames = csPerMinValues.filter(
     (value) => value < avgCsPerMin - 0.5,
-  ).length;
-  const lowVisionGames = visionValues.filter(
-    (value) => value < avgVisionScore - 5,
   ).length;
   const lowKpGames = kpValues.filter(
     (value) => value < avgKillParticipation - 8,
@@ -159,12 +166,10 @@ export function buildHistoryStats(
   return {
     sampleSize: historyList.length,
     avgCsPerMin: Math.round(avgCsPerMin * 100) / 100,
-    avgVisionScore: Math.round(avgVisionScore * 100) / 100,
     avgKillParticipation: Math.round(avgKillParticipation * 100) / 100,
     avgDeaths: Math.round(avgDeaths * 100) / 100,
     winRate: Math.round(winRate * 10) / 10,
     belowAvgCsGames,
-    lowVisionGames,
     lowKpGames,
     highDeathGames,
     mostPlayedChampions,
@@ -178,6 +183,7 @@ export function buildCoachingPayload(
   viewerPuuid: string,
   recentMatches: MatchSummaryResponse[],
   leagueEntry: LeagueEntry | null,
+  timelineSignals?: TimelineCoachingSignals,
 ): CoachingPayload {
   const gameDurationMinutes =
     match.durationSeconds > 0
@@ -197,6 +203,17 @@ export function buildCoachingPayload(
 
   const csVsOpponent = null;
 
+  const csAt10 =
+    timelineSignals?.csAt10 ??
+    (typeof match.stats.csAt10 === "number" ? match.stats.csAt10 : null);
+  const csAt20 =
+    timelineSignals?.csAt20 ??
+    (typeof match.stats.csAt20 === "number" ? match.stats.csAt20 : null);
+
+  const deathTimestampsMinutes = timelineSignals?.deathTimestampsMinutes ?? [];
+  const csDropAfterDeaths = timelineSignals?.csDropAfterDeaths ?? [];
+  const biggestCsDropWindow = timelineSignals?.biggestCsDropWindow ?? null;
+
   const history = buildHistoryStats(recentMatches, viewerPuuid);
 
   const contextTier = leagueEntry?.tier ?? "UNRANKED";
@@ -213,10 +230,12 @@ export function buildCoachingPayload(
       assists: match.kda.assists,
       csTotal: match.stats.cs,
       csPerMin,
+      csAt10,
+      csAt20,
       csVsOpponent,
-      visionScore: match.stats.visionScore,
-      wardsPlaced: null,
-      wardsDestroyed: null,
+      deathTimestampsMinutes,
+      csDropAfterDeaths,
+      biggestCsDropWindow,
       damageDealt:
         typeof (match as any).damageToChamps === "number"
           ? (match as any).damageToChamps

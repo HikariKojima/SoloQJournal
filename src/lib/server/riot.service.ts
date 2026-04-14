@@ -8,6 +8,7 @@
 
 import { RIOT_API_KEY } from "$env/static/private";
 import type {
+  MatchTimelineInsights,
   MatchDetailsResponse,
   MatchSummaryResponse,
   RankedSoloEntry,
@@ -326,6 +327,161 @@ async function getTimelineCsAt(
   targetMatchId: string,
   participantId: number,
 ): Promise<{ csAt10?: number; csAt20?: number }> {
+  const timelineInsights = await getTimelineInsights(
+    region,
+    targetMatchId,
+    participantId,
+  );
+
+  return {
+    csAt10: timelineInsights.csAt10,
+    csAt20: timelineInsights.csAt20,
+  };
+}
+
+function roundTo(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function buildCsDropAfterDeath(
+  frames: any[],
+  deathTimestampsMs: number[],
+  participantId: number,
+) {
+  const lastMinute = Math.max(0, frames.length - 1);
+
+  const readTotalCsAtMinute = (minute: number): number | null => {
+    const frame = frames[minute];
+    if (!frame?.participantFrames) return null;
+
+    const participantFrame =
+      frame.participantFrames[String(participantId)] ??
+      frame.participantFrames[participantId];
+    if (!participantFrame) return null;
+
+    const laneCs = Number(participantFrame.minionsKilled ?? 0);
+    const jungleCs = Number(participantFrame.jungleMinionsKilled ?? 0);
+    return laneCs + jungleCs;
+  };
+
+  const readCsPerMinWindow = (
+    startMinute: number,
+    endMinute: number,
+  ): number | null => {
+    if (endMinute <= startMinute) return null;
+    const startCs = readTotalCsAtMinute(startMinute);
+    const endCs = readTotalCsAtMinute(endMinute);
+    if (startCs === null || endCs === null) return null;
+    return (endCs - startCs) / (endMinute - startMinute);
+  };
+
+  return deathTimestampsMs.map((timestampMs) => {
+    const deathMinute = roundTo(timestampMs / 60000, 1);
+    const anchorMinute = Math.max(
+      0,
+      Math.min(lastMinute, Math.floor(timestampMs / 60000)),
+    );
+
+    const preStart = Math.max(0, anchorMinute - 3);
+    const preEnd = anchorMinute;
+    const postStart = anchorMinute;
+    const postEnd = Math.min(lastMinute, anchorMinute + 3);
+
+    const preDeathCsPerMin = readCsPerMinWindow(preStart, preEnd);
+    const postDeathCsPerMin = readCsPerMinWindow(postStart, postEnd);
+
+    const dropPerMin =
+      preDeathCsPerMin !== null && postDeathCsPerMin !== null
+        ? roundTo(preDeathCsPerMin - postDeathCsPerMin, 2)
+        : null;
+
+    return {
+      deathMinute,
+      preDeathCsPerMin:
+        preDeathCsPerMin === null ? null : roundTo(preDeathCsPerMin, 2),
+      postDeathCsPerMin:
+        postDeathCsPerMin === null ? null : roundTo(postDeathCsPerMin, 2),
+      dropPerMin,
+    };
+  });
+}
+
+function getBiggestCsDropWindow(
+  frames: any[],
+  participantId: number,
+): MatchTimelineInsights["biggestCsDropWindow"] {
+  const lastMinute = Math.max(0, frames.length - 1);
+  if (lastMinute < 6) {
+    return null;
+  }
+
+  const readTotalCsAtMinute = (minute: number): number | null => {
+    const frame = frames[minute];
+    if (!frame?.participantFrames) return null;
+
+    const participantFrame =
+      frame.participantFrames[String(participantId)] ??
+      frame.participantFrames[participantId];
+    if (!participantFrame) return null;
+
+    const laneCs = Number(participantFrame.minionsKilled ?? 0);
+    const jungleCs = Number(participantFrame.jungleMinionsKilled ?? 0);
+    return laneCs + jungleCs;
+  };
+
+  let biggestDrop: { startMinute: number; endMinute: number; dropPerMin: number } | null = null;
+
+  for (let minute = 3; minute <= lastMinute - 3; minute++) {
+    const preStart = minute - 3;
+    const preEnd = minute;
+    const postStart = minute;
+    const postEnd = minute + 3;
+
+    const preStartCs = readTotalCsAtMinute(preStart);
+    const preEndCs = readTotalCsAtMinute(preEnd);
+    const postStartCs = readTotalCsAtMinute(postStart);
+    const postEndCs = readTotalCsAtMinute(postEnd);
+
+    if (
+      preStartCs === null ||
+      preEndCs === null ||
+      postStartCs === null ||
+      postEndCs === null
+    ) {
+      continue;
+    }
+
+    const preRate = (preEndCs - preStartCs) / (preEnd - preStart);
+    const postRate = (postEndCs - postStartCs) / (postEnd - postStart);
+    const drop = preRate - postRate;
+
+    if (drop <= 0) {
+      continue;
+    }
+
+    if (!biggestDrop || drop > biggestDrop.dropPerMin) {
+      biggestDrop = {
+        startMinute: minute,
+        endMinute: postEnd,
+        dropPerMin: roundTo(drop, 2),
+      };
+    }
+  }
+
+  return biggestDrop;
+}
+
+async function getTimelineInsights(
+  region: string,
+  targetMatchId: string,
+  participantId: number,
+): Promise<
+  MatchTimelineInsights & {
+    csAt10?: number;
+    csAt20?: number;
+  }
+> {
   try {
     // Check timeline cache first
     const cacheKey = getCacheKey(
@@ -342,7 +498,12 @@ async function getTimelineCsAt(
     const timeline = await riotFetch(timelineUrl, false); // Don't use API cache for timeline
     const frames = timeline?.info?.frames;
     if (!Array.isArray(frames) || frames.length === 0) {
-      return {};
+      return {
+        deathTimestampsMs: [],
+        deathTimestampsMinutes: [],
+        csDropAfterDeaths: [],
+        biggestCsDropWindow: null,
+      };
     }
 
     const readCsAtMinute = (minute: number): number | undefined => {
@@ -359,15 +520,43 @@ async function getTimelineCsAt(
       return laneCs + jungleCs;
     };
 
-    const timelineCs = {
+    const deathTimestampsMs: number[] = [];
+    for (const frame of frames) {
+      const events = Array.isArray(frame?.events) ? frame.events : [];
+      for (const event of events) {
+        if (event?.type !== "CHAMPION_KILL") continue;
+        if (Number(event?.victimId) !== participantId) continue;
+        const timestamp = Number(event?.timestamp);
+        if (Number.isFinite(timestamp) && timestamp >= 0) {
+          deathTimestampsMs.push(timestamp);
+        }
+      }
+    }
+
+    const timelineInsights = {
       csAt10: readCsAtMinute(10),
       csAt20: readCsAtMinute(20),
+      deathTimestampsMs,
+      deathTimestampsMinutes: deathTimestampsMs.map((timestampMs) =>
+        roundTo(timestampMs / 60000, 1),
+      ),
+      csDropAfterDeaths: buildCsDropAfterDeath(
+        frames,
+        deathTimestampsMs,
+        participantId,
+      ),
+      biggestCsDropWindow: getBiggestCsDropWindow(frames, participantId),
     };
 
-    setCached(timelineCache, cacheKey, timelineCs);
-    return timelineCs;
+    setCached(timelineCache, cacheKey, timelineInsights);
+    return timelineInsights;
   } catch {
-    return {};
+    return {
+      deathTimestampsMs: [],
+      deathTimestampsMinutes: [],
+      csDropAfterDeaths: [],
+      biggestCsDropWindow: null,
+    };
   }
 }
 
@@ -643,8 +832,23 @@ export async function getMatchDetails(
   };
 
   let timelineCs: { csAt10?: number; csAt20?: number } = {};
+  let timelineInsights: MatchDetailsResponse["timelineInsights"] = undefined;
   if (includeTimeline) {
-    timelineCs = await getTimelineCsAt(region, matchId, participant.participantId);
+    const fullInsights = await getTimelineInsights(
+      region,
+      matchId,
+      participant.participantId,
+    );
+    timelineCs = {
+      csAt10: fullInsights.csAt10,
+      csAt20: fullInsights.csAt20,
+    };
+    timelineInsights = {
+      deathTimestampsMs: fullInsights.deathTimestampsMs,
+      deathTimestampsMinutes: fullInsights.deathTimestampsMinutes,
+      csDropAfterDeaths: fullInsights.csDropAfterDeaths,
+      biggestCsDropWindow: fullInsights.biggestCsDropWindow,
+    };
   }
 
   return {
@@ -665,6 +869,7 @@ export async function getMatchDetails(
       queueId: data.info.queueId,
       gameMode: data.info.gameMode,
     },
+    timelineInsights,
   };
 }
 

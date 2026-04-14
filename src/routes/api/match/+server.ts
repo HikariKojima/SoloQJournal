@@ -62,6 +62,11 @@ export async function GET({ url, request, getClientAddress }: RequestEvent) {
         csAt20:
           typeof match.stats.csAt20 === "number" ? match.stats.csAt20 : null,
       },
+      timeline: {
+        deathTimestampsMinutes: match.timelineInsights?.deathTimestampsMinutes ?? [],
+        csDropAfterDeaths: match.timelineInsights?.csDropAfterDeaths ?? [],
+        biggestCsDropWindow: match.timelineInsights?.biggestCsDropWindow ?? null,
+      },
     }, {
       headers: rateLimitHeaders,
     });

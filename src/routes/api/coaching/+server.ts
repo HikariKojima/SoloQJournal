@@ -84,9 +84,18 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
       },
     });
   } catch (err: any) {
-    const reason = err?.message || "Failed to process coaching review";
+    const statusCode =
+      typeof err?.status === "number" && err.status >= 400 && err.status <= 599
+        ? err.status
+        : 500;
+    const reason =
+      statusCode === 503
+        ? "AI coaching is temporarily overloaded. Please try again in a few seconds."
+        : statusCode === 429
+          ? "AI coaching is rate-limited right now. Please retry shortly."
+          : err?.message || "Failed to process coaching review";
     return new Response(reason, {
-      status: 500,
+      status: statusCode,
       headers: rateLimitHeaders,
     });
   }

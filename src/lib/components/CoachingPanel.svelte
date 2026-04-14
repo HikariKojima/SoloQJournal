@@ -3,7 +3,11 @@
   import { Sparkles } from "lucide-svelte";
   import { buildCoachingPayload } from "$lib/utils/coaching";
   import type { MatchSummaryResponse } from "$lib/types";
-  import type { LeagueEntry, MatchHistoryStats } from "$lib/utils/coaching";
+  import type {
+    LeagueEntry,
+    MatchHistoryStats,
+    TimelineCoachingSignals,
+  } from "$lib/utils/coaching";
 
   const { match, history, playerPuuid, leagueEntry } = $props<{
     match: MatchSummaryResponse;
@@ -11,6 +15,11 @@
     playerPuuid: string;
     leagueEntry: LeagueEntry | null;
   }>();
+
+  const inferredPlatform = $derived.by(() => {
+    const prefix = match.matchId?.split("_")[0]?.toLowerCase();
+    return prefix || "euw1";
+  });
 
   let isLoading = $state(false);
   let coachingText = $state("");
@@ -100,6 +109,53 @@
     return segments;
   }
 
+  async function getTimelineSignalsForCoaching(): Promise<TimelineCoachingSignals | undefined> {
+    const matchTimeline = match.timelineInsights;
+    const hasInMemorySignals =
+      Array.isArray(matchTimeline?.deathTimestampsMinutes) &&
+      Array.isArray(matchTimeline?.csDropAfterDeaths);
+
+    if (hasInMemorySignals) {
+      return {
+        csAt10:
+          typeof match.stats.csAt10 === "number" ? match.stats.csAt10 : null,
+        csAt20:
+          typeof match.stats.csAt20 === "number" ? match.stats.csAt20 : null,
+        deathTimestampsMinutes: matchTimeline?.deathTimestampsMinutes ?? [],
+        csDropAfterDeaths: matchTimeline?.csDropAfterDeaths ?? [],
+        biggestCsDropWindow: matchTimeline?.biggestCsDropWindow ?? null,
+      };
+    }
+
+    const params = new URLSearchParams({
+      matchId: match.matchId,
+      puuid: playerPuuid,
+      platform: inferredPlatform,
+    });
+
+    const res = await fetch(`/api/match?${params.toString()}`);
+    if (!res.ok) {
+      return undefined;
+    }
+
+    const payload = await res.json();
+    const timeline = payload?.timeline ?? {};
+
+    return {
+      csAt10:
+        typeof payload?.stats?.csAt10 === "number" ? payload.stats.csAt10 : null,
+      csAt20:
+        typeof payload?.stats?.csAt20 === "number" ? payload.stats.csAt20 : null,
+      deathTimestampsMinutes: Array.isArray(timeline.deathTimestampsMinutes)
+        ? timeline.deathTimestampsMinutes
+        : [],
+      csDropAfterDeaths: Array.isArray(timeline.csDropAfterDeaths)
+        ? timeline.csDropAfterDeaths
+        : [],
+      biggestCsDropWindow: timeline.biggestCsDropWindow ?? null,
+    };
+  }
+
   async function reviewGame() {
     if (hasReviewed && coachingText) return;
     if (aiConsent !== "granted") {
@@ -119,11 +175,13 @@
     coachingText = "";
 
     try {
+      const timelineSignals = await getTimelineSignalsForCoaching();
       const payload = buildCoachingPayload(
         match,
         playerPuuid,
         [match],
         leagueEntry,
+        timelineSignals,
       );
       payload.history = history;
 
