@@ -911,10 +911,13 @@ async function buildMatchSummary(
           ? findTeammateByPositions("BOTTOM", "BOT")
           : findTeammateByPositions("JUNGLE");
   const laneOpponentParticipant =
-    enemyParticipants.find((p: any) => getPosition(p) === playerPosition) ??
-    (playerPosition === "JUNGLE"
-      ? enemyParticipants.find((p: any) => getPosition(p) === "JUNGLE")
-      : null);
+    playerPositionUpper === "JUNGLE"
+      ? enemyParticipants.find((p: any) => {
+          const pos = getPosition(p).toUpperCase();
+          return pos === "MIDDLE" || pos === "MID";
+        }) ?? null
+      : enemyParticipants.find((p: any) => getPosition(p) === playerPosition) ??
+        null;
   const enemyJunglerParticipant =
     enemyParticipants.find((p: any) => getPosition(p) === "JUNGLE") ?? null;
 
