@@ -552,11 +552,11 @@ function buildMajorTeamfights(
         }
       }
 
-      // Require >= 3 enemy and >= 2 ally participation
+      // Require at least 3 participants from each team to treat this as a major fight.
       const playerTeam = playerTeamIsA ? teamAChampions : teamBChampions;
       const enemyTeam = playerTeamIsA ? teamBChampions : teamAChampions;
       
-      if (playerTeam.size < 2 || enemyTeam.size < 3) {
+      if (playerTeam.size < 3 || enemyTeam.size < 3) {
         return null; // Filter out this cluster
       }
 
