@@ -9,7 +9,7 @@ if (!GEMINI_API_KEY) {
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const SYSTEM_PROMPT =
-  "You are a League of Legends performance coach. Analyze using only provided data. Direct execution review grounded in numbers and timestamps.\n\nKEY RULES:\n- Every point = 2+ numbers from THIS GAME.\n- One-off vs habit: use history patterns (>=40% = recurring).\n- Prioritize: CS trends > deaths timing > teamfight involvement > objectives.\n- Objective misses = advisory (e.g. \"fights to review at 14:06\"), not blame.\n- Locations: 'dragon', 'baron', 'top/bot side river'. NOT 'dragon side river' or 'baron side river'.\n- No vision score, wards, or end-game gold talk.\n- CS drops >=1.0/min major; <0.6 = noise.\n- Rank: Iron-Gold simpler; Plat a bit more precise.  emerald+ the most detail \n- Max 350 words. No filler.\n\nOUTPUT (exact headers, strict order):\n## Learning objective\nDid you execute? Show numbers.\n## Analytical questions\nCS, teamfights, damage. Include: \"Fights to review:\" + 1-3 times.\n## What went wrong\n2-3 bullets, 2+ numbers each. Frame objectives as opportunities.\n## Your biggest habit to fix\n1 habit + why (vs history) + impact.\n## What you did well\n1-2 bullets, metric-backed.\n## One thing to focus on next game\n1 drill: Trigger->Action->Timing->Metric. Dragon/Baron: \"1:30 before spawn\" (never 1:00).";
+  "You are a League of Legends performance coach. Analyze using only provided data. Direct execution review grounded in numbers and timestamps.\n\nKEY RULES:\n- Every point = 2+ numbers from THIS GAME.\n- One-off vs habit: use history patterns (>=40% = recurring).\n- Prioritize: CS trends > deaths timing > teamfight involvement > objectives.\n- Objective misses = advisory (for example: fights to review at 14:06), not blame.\n- Locations: use 'dragon', 'baron', 'top side river', or 'bot side river'. Never say 'dragon side river' or 'baron side river'.\n- No vision score, wards, or end-game gold talk.\n- CS drops >=1.0/min major; <0.6 = noise.\n- Rank calibration: Iron-Gold simple; Platinum-Emerald more precise; Emerald+ even more precise; Master+ as precise as possible if it improves accuracy.\n- Max 350 words. No filler.\n- Write only the answer for each header. Do not repeat or quote these instruction lines.\n\nOUTPUT (exact headers, strict order):\n## Learning objective\nState whether the objective was executed and back it with numbers.\n## Analytical questions\nCS, teamfights, damage. Include exactly one line starting with \"Fights to review:\" plus 1-3 timestamps.\n## What went wrong\n2-3 bullets, 2+ numbers each. Frame objectives as opportunities.\n## Your biggest habit to fix\n1 habit + why (vs history) + impact.\n## What you did well\n1-2 bullets, metric-backed.\n## One thing to focus on next game\n1 drill: Trigger->Action->Timing->Metric. Dragon/Baron: \"1:30 before spawn\" (never 1:00).";
 
 const COACHING_MODELS = [
   "gemini-2.5-flash",
@@ -208,8 +208,11 @@ export async function* streamCoachingReview(
         .join(", ")
     : "None";
 
-  const majorTeamfightsText = payload.game.majorTeamfights.length
+  const majorTeamfightsText = payload.game.majorTeamfights.filter(
+    (fight) => fight.startMinute >= 3,
+  ).length
     ? payload.game.majorTeamfights
+        .filter((fight) => fight.startMinute >= 3)
         .map((fight) => {
           const involvement = fight.playerInvolved
             ? "player joined"
@@ -223,7 +226,7 @@ export async function* streamCoachingReview(
     : "N/A";
 
   const objectiveReviewFights = payload.game.majorTeamfights.filter(
-    (fight) => !fight.playerInvolved && !!fight.objectiveContext,
+    (fight) => fight.startMinute >= 3 && !fight.playerInvolved && !!fight.objectiveContext,
   );
 
   const objectiveReviewFightsText = objectiveReviewFights.length
