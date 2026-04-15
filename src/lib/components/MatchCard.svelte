@@ -354,78 +354,156 @@
     <div class="order-5 flex min-w-24.5 flex-col items-center gap-[0.35rem] max-md:min-w-0 max-md:items-start">
       <span class="text-[11px] uppercase leading-none tracking-[0.08em] text-slate-50">VS</span>
       <div class="flex items-start gap-1.5 max-md:gap-0">
-        {#if match.laneOpponent?.champion}
-          <div class="flex flex-col items-center gap-1">
-            <div
-              class={`${championCircleBaseClass} h-12.5 w-12.5 max-md:h-10 max-md:w-10 ${enemyRingClass}`}
-            >
-              {#if enemyIconFailed}
-                <div class={playerFallbackClass}>
-                  {match.laneOpponent.champion.slice(0, 2).toUpperCase()}
-                </div>
-              {:else}
+        {#if match.playerPosition?.toUpperCase() === "JUNGLE"}
+          <!-- Player is jungle: show enemy jungler first (larger), then enemy mid (smaller) -->
+          {#if match.enemyJungler?.champion}
+            <div class="flex flex-col items-center gap-1">
+              <div
+                class={`${championCircleBaseClass} h-12.5 w-12.5 max-md:h-10 max-md:w-10 ${enemyRingClass}`}
+              >
+                {#if enemyJunglerIconFailed}
+                  <div class={playerFallbackClass}>
+                    {match.enemyJungler.champion.slice(0, 2).toUpperCase()}
+                  </div>
+                {:else}
+                  <img
+                    src={championDdragonUrl(match.enemyJungler.champion)}
+                    alt={match.enemyJungler.champion}
+                    width="44"
+                    height="44"
+                    loading="lazy"
+                    class={championImageClass}
+                    onerror={() => {
+                      enemyJunglerIconFailed = true;
+                    }}
+                  />
+                {/if}
+              </div>
+
+              {#if enemyJunglerRoleIcon}
                 <img
-                  src={championDdragonUrl(match.laneOpponent.champion)}
-                  alt={match.laneOpponent.champion}
-                  width="44"
-                  height="44"
+                  src={enemyJunglerRoleIcon}
+                  alt="Enemy jungler role"
+                  width="14"
+                  height="14"
+                  class={roleIconClass}
                   loading="lazy"
-                  class={championImageClass}
-                  onerror={() => {
-                    enemyIconFailed = true;
-                  }}
                 />
               {/if}
             </div>
+          {/if}
 
-            {#if enemyRoleIcon}
-              <img
-                src={enemyRoleIcon}
-                alt="Enemy role"
-                width="14"
-                height="14"
-                class={roleIconClass}
-                loading="lazy"
-              />
-            {/if}
-          </div>
-        {/if}
+          {#if match.laneOpponent?.champion}
+            <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
+              <div
+                class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
+              >
+                {#if enemyIconFailed}
+                  <div class={junglerFallbackClass}>
+                    {match.laneOpponent.champion.slice(0, 2).toUpperCase()}
+                  </div>
+                {:else}
+                  <img
+                    src={championDdragonUrl(match.laneOpponent.champion)}
+                    alt={match.laneOpponent.champion}
+                    width="32"
+                    height="32"
+                    loading="lazy"
+                    class={championImageClass}
+                    onerror={() => {
+                      enemyIconFailed = true;
+                    }}
+                  />
+                {/if}
+              </div>
 
-        {#if match.enemyJungler?.champion}
-          <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
-            <div
-              class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
-            >
-              {#if enemyJunglerIconFailed}
-                <div class={junglerFallbackClass}>
-                  {match.enemyJungler.champion.slice(0, 2).toUpperCase()}
-                </div>
-              {:else}
+              {#if enemyRoleIcon}
                 <img
-                  src={championDdragonUrl(match.enemyJungler.champion)}
-                  alt={match.enemyJungler.champion}
-                  width="32"
-                  height="32"
+                  src={enemyRoleIcon}
+                  alt="Enemy role"
+                  width="14"
+                  height="14"
+                  class={roleIconClass}
                   loading="lazy"
-                  class={championImageClass}
-                  onerror={() => {
-                    enemyJunglerIconFailed = true;
-                  }}
                 />
               {/if}
             </div>
+          {/if}
+        {:else}
+          <!-- Player is not jungle: show lane opponent first (larger), then enemy jungler (smaller) -->
+          {#if match.laneOpponent?.champion}
+            <div class="flex flex-col items-center gap-1">
+              <div
+                class={`${championCircleBaseClass} h-12.5 w-12.5 max-md:h-10 max-md:w-10 ${enemyRingClass}`}
+              >
+                {#if enemyIconFailed}
+                  <div class={playerFallbackClass}>
+                    {match.laneOpponent.champion.slice(0, 2).toUpperCase()}
+                  </div>
+                {:else}
+                  <img
+                    src={championDdragonUrl(match.laneOpponent.champion)}
+                    alt={match.laneOpponent.champion}
+                    width="44"
+                    height="44"
+                    loading="lazy"
+                    class={championImageClass}
+                    onerror={() => {
+                      enemyIconFailed = true;
+                    }}
+                  />
+                {/if}
+              </div>
 
-            {#if enemyJunglerRoleIcon}
-              <img
-                src={enemyJunglerRoleIcon}
-                alt="Enemy jungler role"
-                width="14"
-                height="14"
-                class={roleIconClass}
-                loading="lazy"
-              />
-            {/if}
-          </div>
+              {#if enemyRoleIcon}
+                <img
+                  src={enemyRoleIcon}
+                  alt="Enemy role"
+                  width="14"
+                  height="14"
+                  class={roleIconClass}
+                  loading="lazy"
+                />
+              {/if}
+            </div>
+          {/if}
+
+          {#if match.enemyJungler?.champion}
+            <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
+              <div
+                class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
+              >
+                {#if enemyJunglerIconFailed}
+                  <div class={junglerFallbackClass}>
+                    {match.enemyJungler.champion.slice(0, 2).toUpperCase()}
+                  </div>
+                {:else}
+                  <img
+                    src={championDdragonUrl(match.enemyJungler.champion)}
+                    alt={match.enemyJungler.champion}
+                    width="32"
+                    height="32"
+                    loading="lazy"
+                    class={championImageClass}
+                    onerror={() => {
+                      enemyJunglerIconFailed = true;
+                    }}
+                  />
+                {/if}
+              </div>
+
+              {#if enemyJunglerRoleIcon}
+                <img
+                  src={enemyJunglerRoleIcon}
+                  alt="Enemy jungler role"
+                  width="14"
+                  height="14"
+                  class={roleIconClass}
+                  loading="lazy"
+                />
+              {/if}
+            </div>
+          {/if}
         {/if}
       </div>
     </div>
