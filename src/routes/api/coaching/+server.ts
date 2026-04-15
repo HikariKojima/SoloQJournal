@@ -12,6 +12,8 @@ const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 5;
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
+  const requestStartMs = performance.now();
+
   const clientKey = getClientKey(request, getClientAddress);
   const limit = applyRateLimit({
     namespace: "coaching",
@@ -58,20 +60,36 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
     const generator = streamCoachingReview(payload);
     const encoder = new TextEncoder();
+    const firstChunkStartMs = performance.now();
     const first = await generator.next();
+    const firstChunkElapsedMs = Math.round(performance.now() - firstChunkStartMs);
+
+    console.info(
+      `[COACHING][API_FIRST_CHUNK] firstChunkMs=${firstChunkElapsedMs} totalToFirstChunkMs=${Math.round(performance.now() - requestStartMs)}`,
+    );
 
     const readable = new ReadableStream<Uint8Array>({
       async start(controller) {
+        let streamedChunks = 0;
         try {
           if (!first.done && first.value) {
+            streamedChunks += 1;
             controller.enqueue(encoder.encode(first.value));
           }
 
           for await (const piece of generator) {
+            streamedChunks += 1;
             controller.enqueue(encoder.encode(piece));
           }
           controller.close();
+
+          console.info(
+            `[COACHING][API_STREAM_DONE] chunks=${streamedChunks} totalMs=${Math.round(performance.now() - requestStartMs)}`,
+          );
         } catch (err) {
+          console.error(
+            `[COACHING][API_STREAM_ERROR] totalMs=${Math.round(performance.now() - requestStartMs)}`,
+          );
           controller.error(err);
         }
       },
@@ -84,6 +102,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
       },
     });
   } catch (err: any) {
+    console.error(
+      `[COACHING][API_ERROR] totalMs=${Math.round(performance.now() - requestStartMs)} status=${typeof err?.status === "number" ? err.status : "unknown"}`,
+    );
+
     const statusCode =
       typeof err?.status === "number" && err.status >= 400 && err.status <= 599
         ? err.status

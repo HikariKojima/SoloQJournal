@@ -248,8 +248,13 @@
     error = null;
     coachingText = "";
 
+    const reviewStartMs = performance.now();
+    let firstChunkLogged = false;
+
     try {
+      const timelineStartMs = performance.now();
       const timelineSignals = await getTimelineSignalsForCoaching();
+      const timelineElapsedMs = Math.round(performance.now() - timelineStartMs);
       const matchesForHistory =
         recentMatches.length > 0 ? recentMatches : [match];
       const enrichedHistoryMatches = await enrichRecentMatchesForPattern(
@@ -272,6 +277,7 @@
         ? computedPatternHistory
         : history;
 
+      const coachingFetchStartMs = performance.now();
       const res = await fetch("/api/coaching", {
         method: "POST",
         headers: {
@@ -290,9 +296,20 @@
       if (!reader) throw new Error("No streaming body from server");
 
       const decoder = new TextDecoder();
+      let streamChunkCount = 0;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        if (!firstChunkLogged) {
+          firstChunkLogged = true;
+          console.info(
+            `[COACHING][CLIENT_FIRST_CHUNK] ms=${Math.round(performance.now() - coachingFetchStartMs)} timelineMs=${timelineElapsedMs}`,
+          );
+        }
+
+        streamChunkCount += 1;
         coachingText += decoder.decode(value, { stream: true });
       }
 
@@ -303,6 +320,10 @@
         localStorage.setItem(storageKey, coachingText);
       }
       hasReviewed = true;
+
+      console.info(
+        `[COACHING][CLIENT_DONE] totalMs=${Math.round(performance.now() - reviewStartMs)} streamChunks=${streamChunkCount} timelineMs=${timelineElapsedMs}`,
+      );
     } catch (err: any) {
       error = err?.message || "Failed to get coaching review";
     } finally {

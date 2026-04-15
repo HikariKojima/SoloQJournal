@@ -9,18 +9,22 @@ if (!GEMINI_API_KEY) {
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const SYSTEM_PROMPT =
-  "You are a League of Legends performance coach analyzing ONE specific match using the provided stats and recent history.\n\nGoal: produce practical, rank-appropriate coaching that is specific, evidence-based, and immediately usable next game. Write it like a personal execution review, not like an interview. Frame it around what I executed, what I felt, and what I should change next.\n\nHard rules:\n- Use only the data provided. Do not invent events, timings, lanes, or objectives not present in the input.\n- Every criticism must include numeric evidence from THIS GAME and, when possible, a comparison to HISTORY averages.\n- Distinguish clearly between:\n  - one-off issue (single-game variance)\n  - recurring habit (pattern vs history)\n- Prioritize impact: focus on mistakes that most likely changed win chance, not minor optimizations.\n- Prioritize CS patterns over other metrics, especially CS/min trend, csAt10/csAt20, and post-death CS drops.\n- Analyze major teamfights using only provided fields: time, map zone, kill count, involvement, takedowns, deaths. Teamfights tagged with [dragon], [baron], [grubs], or [early] are objective-driven fights and should be prioritized as coaching evidence over untagged skirmishes.\n- If major teamfights are present, explicitly call out whether the player was there or absent.\n- Use damageDealt and damageShare to judge usefulness in fights; avoid \"useless\" language unless numbers clearly support it.\n- Do not give any vision-score advice and do not mention wards or vision metrics.\n- If timeline markers are provided, reference them directly by minute.\n- Treat small changes (< 0.6 CS/min drop) as noise unless reinforced by repeated timestamps.\n- Prioritize major CS breakdowns: >= 1.0 CS/min drop in the post-death window.\n- Never describe a CS stat as a \"drop per minute\" unless you are referring to an explicit computed post-death or windowed CS/min delta. A player can have 9+ CS/min overall and still have a smaller localized drop; do not turn that into an impossible 10 CS/min decline.\n- If the exact localized delta is unavailable, describe it as \"fell from X to Y\" or \"was lower after death\" instead of inventing a larger number.\n- Calibrate by rank:\n  - Iron-Gold: simpler language, fundamentals, fewer concepts.\n  - Platinum-Diamond+: more precise tradeoffs and tempo concepts.\n- Keep tone direct and coach-like. No motivational filler.\n\nOutput format (must match exactly these headers and this order):\n\n## Emotional reflection\n- Start by describing the emotional state or pressure of the game from my perspective in 1-2 sentences.\n- Keep it grounded in the match result and key swings, not generic empathy.\n\n## Learning objective\n- State the main objective I was trying to execute in this game.\n- Judge whether I actually executed it, using numbers.\n\n## Analytical questions\n- Answer the key mechanical and decision-making questions that explain the result.\n- Include CS timing, teamfight presence, and fight damage where relevant.\n\n## What went wrong\n- 2-3 bullets.\n- Each bullet must include at least 2 concrete numbers.\n- If the game was a win, frame as risk areas to watch.\n\n## Your biggest habit to fix\n- Exactly 1 habit.\n- State why it is a HABIT (comparison vs history) or explicitly say it looks ONE-OFF.\n- Explain expected impact in one sentence.\n\n## What you did well\n- 1-2 bullets.\n- Must be specific and metric-backed.\n\n## One thing to focus on next game\n- Exactly one drill.\n- Format: Trigger -> Action -> Timing -> Success metric.\n- Must be measurable in the next game.\n\nConstraints:\n- Maximum 350 words total.\n- No generic advice without numeric context and a concrete trigger.\n- Do not talk about end-of-game gold totals as a coaching point. Only mention gold when tied to pre-death or timing context.\n- Do not mention item prices.";
+  "You are a League of Legends performance coach analyzing ONE specific match using the provided stats and recent history.\n\nGoal: produce practical, rank-appropriate coaching that is specific, evidence-based, and immediately usable next game. Write it like a personal execution review, not like an interview. Frame it around what I executed, what I felt, and what I should change next.\n\nHard rules:\n- Use only the data provided. Do not invent events, timings, lanes, or objectives not present in the input.\n- Every criticism must include numeric evidence from THIS GAME and, when possible, a comparison to HISTORY averages.\n- Distinguish clearly between:\n  - one-off issue (single-game variance)\n  - recurring habit (pattern vs history)\n- Prioritize impact: focus on mistakes that most likely changed win chance, not minor optimizations.\n- Prioritize CS patterns over other metrics, especially CS/min trend, csAt10/csAt20, and post-death CS drops.\n- Analyze major teamfights using only provided fields: time, map zone, kill count, involvement, takedowns, deaths. Teamfights tagged with [dragon], [baron], [grubs], or [early] are objective-driven fights and should be prioritized as coaching evidence over untagged skirmishes.\n- For objective-related missed fights, use advisory language. Do not write blame-style phrasing such as \"you were absent\" as a standalone judgment.\n- Prefer phrasing like: \"I identified high-impact fights to review at 14:06 and 19:00.\"\n- When mentioning missed objective fights, include a short replay-check suggestion so the player can decide what to change (for example: wave state, rotation timing, pathing, or commit window).\n- Use damageDealt and damageShare to judge usefulness in fights; avoid \"useless\" language unless numbers clearly support it.\n- Do not give any vision-score advice and do not mention wards or vision metrics.\n- When describing fight locations, use objective names ('dragon', 'baron') or side labels ('top side river', 'bot side river'). Never use phrases like 'dragon side river' or 'baron side river' in coaching output.\n- If timeline markers are provided, reference them directly by minute.\n- Treat small changes (< 0.6 CS/min drop) as noise unless reinforced by repeated timestamps.\n- Prioritize major CS breakdowns: >= 1.0 CS/min drop in the post-death window.\n- Never describe a CS stat as a \"drop per minute\" unless you are referring to an explicit computed post-death or windowed CS/min delta. A player can have 9+ CS/min overall and still have a smaller localized drop; do not turn that into an impossible 10 CS/min decline.\n- If the exact localized delta is unavailable, describe it as \"fell from X to Y\" or \"was lower after death\" instead of inventing a larger number.\n- Calibrate by rank:\n  - Iron-Gold: simpler language, fundamentals, fewer concepts.\n  - Platinum-Diamond+: more precise tradeoffs and tempo concepts.\n- Keep tone direct and coach-like. No motivational filler.\n\nOutput format (must match exactly these headers and this order):\n\n## Emotional reflection\n- Start by describing the emotional state or pressure of the game from my perspective in 1-2 sentences.\n- Keep it grounded in the match result and key swings, not generic empathy.\n\n## Learning objective\n- State the main objective I was trying to execute in this game.\n- Judge whether I actually executed it, using numbers.\n\n## Analytical questions\n- Answer the key mechanical and decision-making questions that explain the result.\n- Include CS timing, teamfight presence, and fight damage where relevant.\n- Include exactly one line that starts with: \"Fights to review:\" followed by 1-3 concrete timestamps and what to check in replay.\n\n## What went wrong\n- 2-3 bullets.\n- Each bullet must include at least 2 concrete numbers.\n- If the game was a win, frame as risk areas to watch.\n- Phrase objective-fight misses as review opportunities and suggestions, not fixed verdicts.\n\n## Your biggest habit to fix\n- Exactly 1 habit.\n- State why it is a HABIT (comparison vs history) or explicitly say it looks ONE-OFF.\n- Explain expected impact in one sentence.\n\n## What you did well\n- 1-2 bullets.\n- Must be specific and metric-backed.\n\n## One thing to focus on next game\n- Exactly one drill.\n- Format: Trigger -> Action -> Timing -> Success metric.\n- Must be measurable in the next game.\n- For Dragon/Baron setup drills, never recommend 1:00 setup windows. Use at least 1:30 before spawn as the trigger timing.\n- If the drill is objective setup, write Trigger in this explicit style: \"1:30 before Dragon/Baron spawn\" (or longer lead time such as 1:45 or 2:00).\n\nConstraints:\n- Maximum 350 words total.\n- No generic advice without numeric context and a concrete trigger.\n- Do not talk about end-of-game gold totals as a coaching point. Only mention gold when tied to pre-death or timing context.\n- Do not mention item prices.";
 
 const COACHING_MODELS = [
-  "gemini-3.1-flash-lite-preview",
+  "gemini-2.5-flash",
   "gemini-3-flash-preview",
   "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
+  "gemini-3.1-flash-lite-preview",
 ];
 
 const TRANSIENT_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
-const MODEL_ATTEMPTS_PER_MODEL = 2;
+const MODEL_ATTEMPTS_PER_MODEL = 1;
 const BASE_BACKOFF_MS = 500;
+
+function formatElapsedMs(startMs: number): string {
+  return `${Math.round(performance.now() - startMs)}ms`;
+}
 
 function extractErrorStatus(err: unknown): number | null {
   if (!err || typeof err !== "object") return null;
@@ -125,6 +129,7 @@ function formatMinutesSeconds(decimalMinutes: number): string {
 export async function* streamCoachingReview(
   payload: CoachingPayload,
 ): AsyncGenerator<string, void, unknown> {
+  const reviewStartMs = performance.now();
   const toValue = (value: number | null | undefined): string => {
     return typeof value === "number" ? String(value) : "N/A";
   };
@@ -206,13 +211,32 @@ export async function* streamCoachingReview(
   const majorTeamfightsText = payload.game.majorTeamfights.length
     ? payload.game.majorTeamfights
         .map((fight) => {
-          const involvement = fight.playerInvolved ? "present" : "absent";
+          const involvement = fight.playerInvolved
+            ? "player joined"
+            : "player did not join";
           const objectiveLabel = fight.objectiveContext
             ? ` [${fight.objectiveContext.objectiveType} ${fight.objectiveContext.teamSecuredIt ? "secured" : "denied"}]`
             : "";
-          return `${formatMinutesSeconds(fight.startMinute)}-${formatMinutesSeconds(fight.endMinute)} ${fight.mapZone} (${fight.killEvents} kills, ${involvement}, takedowns ${fight.playerTakedowns}, deaths ${fight.playerDeaths})${objectiveLabel}`;
+          return `${formatMinutesSeconds(fight.startMinute)}-${formatMinutesSeconds(fight.endMinute)} ${fight.mapZone} (${fight.killEvents} kills, ${involvement}, player takedowns ${fight.playerTakedowns}, player deaths ${fight.playerDeaths})${objectiveLabel}`;
         })
         .join(" | ")
+    : "N/A";
+
+  const objectiveReviewFights = payload.game.majorTeamfights.filter(
+    (fight) => !fight.playerInvolved && !!fight.objectiveContext,
+  );
+
+  const objectiveReviewFightsText = objectiveReviewFights.length
+    ? objectiveReviewFights
+        .slice(0, 4)
+        .map((fight) => {
+          const context = fight.objectiveContext;
+          if (!context) return "";
+
+          return `${formatMinutesSeconds(fight.startMinute)} (${context.objectiveType}, ${context.teamSecuredIt ? "team secured" : "team denied"}, ${fight.killEvents} kills)`;
+        })
+        .filter(Boolean)
+        .join(", ")
     : "N/A";
 
   const biggestCsDropWindowText = payload.game.biggestCsDropWindow
@@ -225,13 +249,15 @@ export async function* streamCoachingReview(
     ? `\n\n=== MY LEARNING OBJECTIVES ===\n${payload.learningObjectives.map((obj, i) => `${i + 1}. ${obj}`).join("\n")}`
     : "";
 
-  const userMessage = `Player: ${payload.context.summonerName} | ${payload.context.tier} ${payload.context.rank} (${payload.context.lp} LP)\nChampion: ${payload.game.champion} (${payload.game.role}) | ${payload.game.win ? "WIN" : "LOSS"} in ${payload.game.gameDurationMinutes}m\n\n=== THIS GAME ===\nKDA: ${payload.game.kills}/${payload.game.deaths}/${payload.game.assists}\nCS: ${payload.game.csTotal} total (${payload.game.csPerMin}/min)${payload.game.csVsOpponent !== null ? ` | ${payload.game.csVsOpponent > 0 ? "+" : ""}${payload.game.csVsOpponent} vs lane opponent` : ""}\nCS checkpoints: 10m ${toValue(payload.game.csAt10)} | 20m ${toValue(payload.game.csAt20)}\nDeath minutes: ${payload.game.deathTimestampsMinutes.length ? payload.game.deathTimestampsMinutes.map((minute) => formatMinutesSeconds(minute)).join(", ") : "N/A"}\nCS drop after deaths: ${csDropAfterDeathsText}\nMajor CS drops (>=1.0/min): ${majorCsDropsText}\nBiggest CS drop window: ${biggestCsDropWindowText}\nMajor teamfights: ${majorTeamfightsText}\nDamage: ${toValue(payload.game.damageDealt)} dealt (${toPercent(payload.game.damageShare)} of team) | ${toValue(payload.game.damageTaken)} taken\nKill participation: ${payload.game.killParticipation}%\nGold: ${payload.game.goldEarned}${payload.game.goldDiff15 !== null ? ` | Gold diff @15: ${payload.game.goldDiff15 > 0 ? "+" : ""}${payload.game.goldDiff15}` : ""}\nObjectives: ${toValue(payload.game.dragonKills)} dragons | ${toValue(payload.game.baronKills)} barons | ${toValue(payload.game.objectivesStolen)} stolen\nFirst blood: ${payload.game.firstBlood === null ? "N/A" : payload.game.firstBlood ? "Yes" : "No"}\nItems: ${payload.game.items?.length ? payload.game.items.join(", ") : "N/A"}\n\n=== LAST 10 GAMES AVERAGES ===\nSample size: ${payload.history.sampleSize} games\nCS/min avg: ${payload.history.avgCsPerMin} (this game: ${payload.game.csPerMin}) ${payload.game.csPerMin < payload.history.avgCsPerMin - 0.5 ? "below average" : payload.game.csPerMin > payload.history.avgCsPerMin + 0.5 ? "above average" : "normal"}\nKP avg: ${payload.history.avgKillParticipation}% (this game: ${payload.game.killParticipation}%)\nDeaths avg: ${payload.history.avgDeaths} (this game: ${payload.game.deaths}) ${payload.game.deaths > payload.history.avgDeaths + 2 ? "significantly more than usual" : ""}\nPattern counters over last ${payload.history.sampleSize}:\n- CS below own average by >0.5: ${payload.history.belowAvgCsGames}/${payload.history.sampleSize}\n- KP below own average by >8: ${payload.history.lowKpGames}/${payload.history.sampleSize}\n- Deaths above own average by >2: ${payload.history.highDeathGames}/${payload.history.sampleSize}\n- Recurring first-death window: ${payload.history.recurringFirstDeathWindow ?? "none"}${payload.history.recurringFirstDeathCount > 0 ? ` (${payload.history.recurringFirstDeathCount}/${payload.history.deathTimingSamples}, ${toPercent(payload.history.recurringFirstDeathRate)})` : ""}\nWin rate: ${payload.history.winRate}% | Form: ${payload.history.recentForm}\nMost played: ${payload.history.mostPlayedChampions.join(", ")}\nPrimary role: ${payload.history.primaryRole}${learningObjectivesText}\n\nData confidence: ${dataConfidence} (${dataConfidenceReason})\n\nMissing-data rule: treat any metric shown as N/A as unavailable and do not criticize or infer from it.\nOne-off vs pattern rule: use the pattern counters. Usually classify as recurring when >= 4 games out of 10 (or >= 40% of sample if sample < 10).\nConfidence rule: if Data confidence is LOW, use more cautious language and avoid strong causal claims.\n\nGive a coaching review following the exact format specified.`;
+  const userMessage = `Player: ${payload.context.summonerName} | ${payload.context.tier} ${payload.context.rank} (${payload.context.lp} LP)\nChampion: ${payload.game.champion} (${payload.game.role}) | ${payload.game.win ? "WIN" : "LOSS"} in ${payload.game.gameDurationMinutes}m\n\n=== THIS GAME ===\nKDA: ${payload.game.kills}/${payload.game.deaths}/${payload.game.assists}\nCS: ${payload.game.csTotal} total (${payload.game.csPerMin}/min)${payload.game.csVsOpponent !== null ? ` | ${payload.game.csVsOpponent > 0 ? "+" : ""}${payload.game.csVsOpponent} vs lane opponent` : ""}\nCS checkpoints: 10m ${toValue(payload.game.csAt10)} | 20m ${toValue(payload.game.csAt20)}\nDeath minutes: ${payload.game.deathTimestampsMinutes.length ? payload.game.deathTimestampsMinutes.map((minute) => formatMinutesSeconds(minute)).join(", ") : "N/A"}\nCS drop after deaths: ${csDropAfterDeathsText}\nMajor CS drops (>=1.0/min): ${majorCsDropsText}\nBiggest CS drop window: ${biggestCsDropWindowText}\nMajor teamfights: ${majorTeamfightsText}\nObjective review opportunities (player did not join): ${objectiveReviewFightsText}\nDamage: ${toValue(payload.game.damageDealt)} dealt (${toPercent(payload.game.damageShare)} of team) | ${toValue(payload.game.damageTaken)} taken\nKill participation: ${payload.game.killParticipation}%\nGold: ${payload.game.goldEarned}${payload.game.goldDiff15 !== null ? ` | Gold diff @15: ${payload.game.goldDiff15 > 0 ? "+" : ""}${payload.game.goldDiff15}` : ""}\nObjectives: ${toValue(payload.game.dragonKills)} dragons | ${toValue(payload.game.baronKills)} barons | ${toValue(payload.game.objectivesStolen)} stolen\nFirst blood: ${payload.game.firstBlood === null ? "N/A" : payload.game.firstBlood ? "Yes" : "No"}\nItems: ${payload.game.items?.length ? payload.game.items.join(", ") : "N/A"}\n\n=== LAST 10 GAMES AVERAGES ===\nSample size: ${payload.history.sampleSize} games\nCS/min avg: ${payload.history.avgCsPerMin} (this game: ${payload.game.csPerMin}) ${payload.game.csPerMin < payload.history.avgCsPerMin - 0.5 ? "below average" : payload.game.csPerMin > payload.history.avgCsPerMin + 0.5 ? "above average" : "normal"}\nKP avg: ${payload.history.avgKillParticipation}% (this game: ${payload.game.killParticipation}%)\nDeaths avg: ${payload.history.avgDeaths} (this game: ${payload.game.deaths}) ${payload.game.deaths > payload.history.avgDeaths + 2 ? "significantly more than usual" : ""}\nPattern counters over last ${payload.history.sampleSize}:\n- CS below own average by >0.5: ${payload.history.belowAvgCsGames}/${payload.history.sampleSize}\n- KP below own average by >8: ${payload.history.lowKpGames}/${payload.history.sampleSize}\n- Deaths above own average by >2: ${payload.history.highDeathGames}/${payload.history.sampleSize}\n- Recurring first-death window: ${payload.history.recurringFirstDeathWindow ?? "none"}${payload.history.recurringFirstDeathCount > 0 ? ` (${payload.history.recurringFirstDeathCount}/${payload.history.deathTimingSamples}, ${toPercent(payload.history.recurringFirstDeathRate)})` : ""}\nWin rate: ${payload.history.winRate}% | Form: ${payload.history.recentForm}\nMost played: ${payload.history.mostPlayedChampions.join(", ")}\nPrimary role: ${payload.history.primaryRole}${learningObjectivesText}\n\nData confidence: ${dataConfidence} (${dataConfidenceReason})\n\nMissing-data rule: treat any metric shown as N/A as unavailable and do not criticize or infer from it.\nOne-off vs pattern rule: use the pattern counters. Usually classify as recurring when >= 4 games out of 10 (or >= 40% of sample if sample < 10).\nConfidence rule: if Data confidence is LOW, use more cautious language and avoid strong causal claims.\n\nGive a coaching review following the exact format specified.`;
 
   let stream: AsyncGenerator<{ text?: string }> | null = null;
   let lastError: unknown;
+  let selectedModel: string | null = null;
 
   for (const model of COACHING_MODELS) {
     for (let attempt = 1; attempt <= MODEL_ATTEMPTS_PER_MODEL; attempt++) {
+      const attemptStartMs = performance.now();
       try {
         stream = await ai.models.generateContentStream({
           model,
@@ -240,6 +266,10 @@ export async function* streamCoachingReview(
             systemInstruction: SYSTEM_PROMPT,
           },
         });
+        selectedModel = model;
+        console.info(
+          `[COACHING][MODEL_OK] model=${model} attempt=${attempt} elapsed=${formatElapsedMs(attemptStartMs)}`,
+        );
         break;
       } catch (err: any) {
         lastError = err;
@@ -247,6 +277,10 @@ export async function* streamCoachingReview(
         const isNotFound = status === 404;
         const isTransient = isTransientProviderError(err);
         const hasMoreAttempts = attempt < MODEL_ATTEMPTS_PER_MODEL;
+
+        console.warn(
+          `[COACHING][MODEL_FAIL] model=${model} attempt=${attempt} status=${status ?? "unknown"} transient=${isTransient} elapsed=${formatElapsedMs(attemptStartMs)}`,
+        );
 
         if (isTransient && hasMoreAttempts) {
           const backoffMs = BASE_BACKOFF_MS * attempt;
@@ -268,6 +302,9 @@ export async function* streamCoachingReview(
   }
 
   if (!stream) {
+    console.error(
+      `[COACHING][ALL_MODELS_FAILED] elapsed=${formatElapsedMs(reviewStartMs)}`,
+    );
     const status = extractErrorStatus(lastError);
 
     if (status === 503 || status === 429) {
@@ -281,9 +318,20 @@ export async function* streamCoachingReview(
     throw lastError ?? new Error("No supported Gemini model found for streaming");
   }
 
+  console.info(
+    `[COACHING][STREAM_START] model=${selectedModel ?? "unknown"} elapsed=${formatElapsedMs(reviewStartMs)}`,
+  );
+
+  let chunkCount = 0;
+
   for await (const chunk of stream) {
     if (chunk.text) {
+      chunkCount += 1;
       yield chunk.text;
     }
   }
+
+  console.info(
+    `[COACHING][STREAM_DONE] model=${selectedModel ?? "unknown"} chunks=${chunkCount} elapsed=${formatElapsedMs(reviewStartMs)}`,
+  );
 }

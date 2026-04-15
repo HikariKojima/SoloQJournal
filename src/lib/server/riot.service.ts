@@ -361,8 +361,8 @@ function getMapZone(position?: { x?: number; y?: number }): string {
   // Simple map buckets to keep teamfight locations readable in coaching output.
   if (x < 4500 && y < 4500) return "blue base side";
   if (x > 11000 && y > 11000) return "red base side";
-  if (x > 9000 && y < 7200) return "dragon side river";
-  if (x < 7200 && y > 9000) return "baron side river";
+  if (x > 9000 && y < 7200) return "bot side river";
+  if (x < 7200 && y > 9000) return "top side river";
   if (Math.abs(x - y) < 1500 && x > 4500 && x < 10500) return "mid lane/river";
   if (x < y) return "blue-side jungle";
   return "red-side jungle";
