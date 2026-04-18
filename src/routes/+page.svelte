@@ -843,7 +843,6 @@
   let objectiveExecution = $state("");
   let wentWell = $state("");
   let wentBad = $state("");
-  let emotionalReflection = $state("");
   let reflectionSaved = $state(false);
   let isLoadingTimelineStats = $state(false);
   let tiltAlertDismissed = $state(false);
@@ -1354,10 +1353,6 @@
       wentBad =
         localStorage.getItem(reflectionFieldKey(match.matchId, "wentBad")) ||
         "";
-      emotionalReflection =
-        localStorage.getItem(
-          reflectionFieldKey(match.matchId, "emotionalReflection"),
-        ) || "";
       emotionalStateScore = emotionToScore(emotionalState);
     }
 
@@ -1434,7 +1429,6 @@
     objectiveExecution = "";
     wentWell = "";
     wentBad = "";
-    emotionalReflection = "";
     reflectionSaved = false;
     isLearningObjectiveOpen = false;
     resetLearningObjectiveUiState();
@@ -2602,7 +2596,7 @@
               </div>
             </div>
 
-            <!-- Emotional State Slider (Per Match) - NOW FIRST -->
+            <!-- Emotional State Slider (Per Match) -->
             <div class="mb-4">
               <label
                 for="emotional-state-slider"
@@ -2639,27 +2633,7 @@
               </div>
             </div>
 
-            <!-- Emotional Reflection - SECOND -->
-            <div class="mb-4">
-              <label
-                for="emotional-reflection"
-                class="block text-base font-semibold text-gray-300 mb-2"
-                >Why did I play that way based on how I felt?</label
-              >
-              <textarea
-                id="emotional-reflection"
-                bind:value={emotionalReflection}
-                onblur={() =>
-                  autoSaveReflectionField(
-                    "emotionalReflection",
-                    emotionalReflection,
-                  )}
-                class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
-                placeholder="Your thoughts..."
-              ></textarea>
-            </div>
-
-            <!-- Learning Objective Dropdown (Persistent) - NOW THIRD -->
+            <!-- Learning Objective Dropdown (Persistent) -->
             <div class="mb-4">
               <label
                 for="learning-objective"
