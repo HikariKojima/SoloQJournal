@@ -37,11 +37,11 @@
   let isLoadingInitialMatches = $state(false);
   let rankHydrationRequestId = 0;
   const hydratedRankPuuids = new SvelteSet<string>();
-  
+
   // All matches loaded for filter options (lazy loaded in background)
   let allSeasonMatches = $state<MatchSummaryResponse[]>([]);
   let isLoadingFilters = $state(false);
-  
+
   // Track profiles currently being enriched to prevent overlaps on rapid searches
   const enrichmentsInProgress = new SvelteSet<string>();
 
@@ -325,12 +325,16 @@
    */
   async function loadAllMatchesForFilters() {
     if (!currentSearchGameName || !currentSearchTagLine) return;
-    
+
     // Create a unique key for this profile
     const enrichmentKey = `${currentSearchGameName}#${currentSearchTagLine}#${selectedRegion}`;
-    
+
     // Avoid duplicate/overlapping enrichments and avoid duplicate background fetches for the same profile
-    if (enrichmentsInProgress.has(enrichmentKey) || isLoadingFilters || allSeasonMatches.length > 0) {
+    if (
+      enrichmentsInProgress.has(enrichmentKey) ||
+      isLoadingFilters ||
+      allSeasonMatches.length > 0
+    ) {
       return;
     }
 
@@ -586,7 +590,9 @@
     if (!fallbackGameName) return "Unknown Summoner";
 
     const fallbackTag = currentSearchTagLine.trim();
-    return fallbackTag ? `${fallbackGameName}#${fallbackTag}` : fallbackGameName;
+    return fallbackTag
+      ? `${fallbackGameName}#${fallbackTag}`
+      : fallbackGameName;
   });
 
   const computedHistory = $derived.by(() => {
@@ -677,7 +683,10 @@
 
   const championFilterOptions = $derived.by(() => {
     // Use all season matches for comprehensive filters, fall back to visible matches
-    const matchesForFilter = allSeasonMatches.length > 0 ? allSeasonMatches : (currentProfile?.matches ?? []);
+    const matchesForFilter =
+      allSeasonMatches.length > 0
+        ? allSeasonMatches
+        : (currentProfile?.matches ?? []);
     const matches = matchesForFilter as Array<any>;
     if (!matches.length) return [];
 
@@ -697,10 +706,12 @@
     selector: (match: MatchSummaryResponse) => string | undefined,
   ) {
     // Use all season matches for comprehensive filters, fall back to visible matches
-    const matchesForFilter = allSeasonMatches.length > 0 ? allSeasonMatches : (currentProfile?.matches ?? []);
+    const matchesForFilter =
+      allSeasonMatches.length > 0
+        ? allSeasonMatches
+        : (currentProfile?.matches ?? []);
     const matches = matchesForFilter as MatchSummaryResponse[];
-    if (!matches.length)
-      return [] as Array<{ champion: string }>;
+    if (!matches.length) return [] as Array<{ champion: string }>;
 
     const counts = new Map<string, number>();
     for (const match of matches) {
@@ -823,6 +834,9 @@
   let learningObjectiveQuery = $state("");
   let highlightedObjectiveIndex = $state(-1);
   let isAddingObjective = $state(false);
+  let editingObjectiveIndex = $state(-1);
+  let editingObjectiveInput = $state("");
+  let editingObjectiveInputEl = $state<HTMLInputElement | null>(null);
   let selectedObjectives = $state<string[]>([]);
   let emotionalState = $state<string>("");
   let emotionalStateScore = $state(3);
@@ -1177,6 +1191,8 @@
   async function openAddObjectiveMode(prefill = "") {
     isLearningObjectiveOpen = true;
     isAddingObjective = true;
+    editingObjectiveIndex = -1;
+    editingObjectiveInput = "";
     learningObjectiveInput = prefill;
     await tick();
     learningObjectiveInputEl?.focus();
@@ -1192,6 +1208,8 @@
     highlightedObjectiveIndex = -1;
     isAddingObjective = false;
     learningObjectiveInput = "";
+    editingObjectiveIndex = -1;
+    editingObjectiveInput = "";
   }
 
   async function toggleLearningObjectiveDropdown() {
@@ -1463,6 +1481,83 @@
       );
       persistSelectedLearningObjectives();
     }
+
+    if (editingObjectiveIndex === index) {
+      editingObjectiveIndex = -1;
+      editingObjectiveInput = "";
+    }
+  }
+
+  async function startEditObjective(objective: string) {
+    const objectiveIndex = learningObjectives.findIndex(
+      (entry) => entry === objective,
+    );
+    if (objectiveIndex < 0) return;
+
+    isAddingObjective = false;
+    editingObjectiveIndex = objectiveIndex;
+    editingObjectiveInput = objective;
+
+    await tick();
+    editingObjectiveInputEl?.focus();
+    editingObjectiveInputEl?.select();
+  }
+
+  function cancelEditObjective() {
+    editingObjectiveIndex = -1;
+    editingObjectiveInput = "";
+  }
+
+  function saveEditedObjective() {
+    if (
+      editingObjectiveIndex < 0 ||
+      editingObjectiveIndex >= learningObjectives.length
+    ) {
+      return;
+    }
+
+    const trimmed = editingObjectiveInput.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const originalObjective = learningObjectives[editingObjectiveIndex];
+    const duplicate = learningObjectives.some(
+      (objective, index) =>
+        index !== editingObjectiveIndex &&
+        objective.toLowerCase() === trimmed.toLowerCase(),
+    );
+
+    if (duplicate) {
+      return;
+    }
+
+    const nextObjectives = [...learningObjectives];
+    nextObjectives[editingObjectiveIndex] = trimmed;
+    learningObjectives = nextObjectives;
+    localStorage.setItem("learningObjectives", JSON.stringify(nextObjectives));
+
+    if (selectedObjectives.includes(originalObjective)) {
+      selectedObjectives = selectedObjectives.map((objective) =>
+        objective === originalObjective ? trimmed : objective,
+      );
+      persistSelectedLearningObjectives();
+    }
+
+    cancelEditObjective();
+  }
+
+  function handleEditObjectiveInputKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveEditedObjective();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEditObjective();
+    }
   }
 
   async function updateObjective(value: string) {
@@ -1505,7 +1600,9 @@
   }
 
   function scoreToEmotion(score: number): string {
-    return emotionScale.find((entry) => entry.score === score)?.value ?? "😐 Neutral";
+    return (
+      emotionScale.find((entry) => entry.score === score)?.value ?? "😐 Neutral"
+    );
   }
 
   function updateEmotionalStateFromSlider(score: number) {
@@ -1554,15 +1651,13 @@
       if (stored) {
         try {
           matchReflections = JSON.parse(stored);
-        } catch {
-        }
+        } catch {}
       }
       const objectives = localStorage.getItem("learningObjectives");
       if (objectives) {
         try {
           learningObjectives = normalizeObjectiveArray(JSON.parse(objectives));
-        } catch {
-        }
+        } catch {}
       }
 
       const storedSelectedObjectives = localStorage.getItem(
@@ -1576,8 +1671,7 @@
           selectedObjectives = parsed.filter((objective) =>
             learningObjectives.includes(objective),
           );
-        } catch {
-        }
+        } catch {}
       }
     }
   });
@@ -1713,11 +1807,13 @@
     </div>
     <ul class="space-y-3">
       {#each profileStore.list as profile, i (`${profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
-        <li class={`group rounded-xl border p-2.5 transition-colors ${
-          i === profileStore.activeIndex
-            ? "border-[#6d28d9] bg-[rgba(109,40,217,0.16)]"
-            : "border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.48)] hover:border-[rgba(148,163,184,0.45)]"
-        }`}>
+        <li
+          class={`group rounded-xl border p-2.5 transition-colors ${
+            i === profileStore.activeIndex
+              ? "border-[#6d28d9] bg-[rgba(109,40,217,0.16)]"
+              : "border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.48)] hover:border-[rgba(148,163,184,0.45)]"
+          }`}
+        >
           <div class="flex items-start gap-2">
             <button
               class="min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 text-left transition hover:bg-[rgba(15,23,42,0.75)]"
@@ -1727,9 +1823,16 @@
                 loadProfile(profile);
               }}
             >
-              <p class="wrap-break-word text-[1.03rem] font-semibold leading-tight text-(--text-primary)">{profile.gameName}{profile.tagLine}</p>
+              <p
+                class="wrap-break-word text-[1.03rem] font-semibold leading-tight text-(--text-primary)"
+              >
+                {profile.gameName}{profile.tagLine}
+              </p>
               <div class="mt-1.5 flex items-center gap-2">
-                <span class="inline-flex items-center rounded-full border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.7)] px-2 py-[0.1rem] text-[0.68rem] font-medium uppercase tracking-[0.08em] text-gray-300">{profile.region}</span>
+                <span
+                  class="inline-flex items-center rounded-full border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.7)] px-2 py-[0.1rem] text-[0.68rem] font-medium uppercase tracking-[0.08em] text-gray-300"
+                  >{profile.region}</span
+                >
               </div>
             </button>
 
@@ -1750,7 +1853,9 @@
     </ul>
 
     <div class="mt-4 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-      <p class="text-xs uppercase tracking-[0.12em] text-slate-300">Privacy tools</p>
+      <p class="text-xs uppercase tracking-[0.12em] text-slate-300">
+        Privacy tools
+      </p>
       <div class="mt-2 flex flex-col gap-2">
         <button
           type="button"
@@ -1847,11 +1952,19 @@
         <p class="text-red-400 text-base mt-2">{tagLineError}</p>
       {/if}
 
-      <div class="mt-3 rounded-lg border border-slate-700 bg-slate-900/45 px-3 py-2 text-sm text-slate-200">
+      <div
+        class="mt-3 rounded-lg border border-slate-700 bg-slate-900/45 px-3 py-2 text-sm text-slate-200"
+      >
         Coaching uses explicit consent before AI processing. Review
-        <a class="underline decoration-slate-400 underline-offset-2 hover:text-white" href="/privacy">Privacy</a>
+        <a
+          class="underline decoration-slate-400 underline-offset-2 hover:text-white"
+          href="/privacy">Privacy</a
+        >
         and
-        <a class="underline decoration-slate-400 underline-offset-2 hover:text-white" href="/terms">Terms</a>.
+        <a
+          class="underline decoration-slate-400 underline-offset-2 hover:text-white"
+          href="/terms">Terms</a
+        >.
       </div>
     </div>
 
@@ -1874,7 +1987,9 @@
       <div class="flex flex-col gap-7 max-md:gap-4">
         {#each Array(3) as _, dayIndex (`search-loader-day-${dayIndex}`)}
           <section>
-            <div class="mb-2 flex items-center justify-between animate-pulse max-md:flex-wrap max-md:items-start max-md:gap-2">
+            <div
+              class="mb-2 flex items-center justify-between animate-pulse max-md:flex-wrap max-md:items-start max-md:gap-2"
+            >
               <div class="h-4 w-20 rounded bg-gray-700/55"></div>
               <div class="flex items-center gap-[0.4rem]">
                 <div class="h-6 w-12 rounded-full bg-gray-700/45"></div>
@@ -1884,20 +1999,33 @@
 
             <div class="flex flex-col gap-3">
               {#each Array(2) as __, cardIndex (`search-loader-card-${dayIndex}-${cardIndex}`)}
-                <div class="relative flex items-center justify-between gap-8 rounded-[14px] border-l-[3px] border-l-[#7c3aed] border-tl-none border-bl-none bg-(--card-bg) px-[1.9rem] py-[1.35rem] pl-[1.65rem] shadow-[0_20px_40px_rgba(0,0,0,0.7)] animate-pulse max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-3 max-md:py-3 max-md:rounded-[14px]" aria-hidden="true">
-                  <div class="flex items-center gap-[1.1rem] max-md:flex-wrap max-md:items-start max-md:gap-3">
+                <div
+                  class="relative flex items-center justify-between gap-8 rounded-[14px] border-l-[3px] border-l-[#7c3aed] border-tl-none border-bl-none bg-(--card-bg) px-[1.9rem] py-[1.35rem] pl-[1.65rem] shadow-[0_20px_40px_rgba(0,0,0,0.7)] animate-pulse max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:px-3 max-md:py-3 max-md:rounded-[14px]"
+                  aria-hidden="true"
+                >
+                  <div
+                    class="flex items-center gap-[1.1rem] max-md:flex-wrap max-md:items-start max-md:gap-3"
+                  >
                     <div class="flex items-start gap-1">
                       <div class="flex flex-col items-center gap-1">
-                        <div class="aspect-square h-12.5 w-12.5 rounded-full bg-gray-700/60"></div>
+                        <div
+                          class="aspect-square h-12.5 w-12.5 rounded-full bg-gray-700/60"
+                        ></div>
                       </div>
                       <div class="flex flex-col items-center gap-1">
-                        <div class="aspect-square h-9.5 w-9.5 rounded-full bg-gray-700/45"></div>
+                        <div
+                          class="aspect-square h-9.5 w-9.5 rounded-full bg-gray-700/45"
+                        ></div>
                       </div>
                     </div>
 
                     <div class="flex flex-col gap-[0.3rem]">
-                      <div class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/50"></div>
-                      <div class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/35"></div>
+                      <div
+                        class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/50"
+                      ></div>
+                      <div
+                        class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/35"
+                      ></div>
                     </div>
 
                     <div class="flex min-w-0 flex-1 flex-col gap-[0.52rem]">
@@ -1905,20 +2033,28 @@
                         <div class="h-4 w-24 rounded bg-gray-700/55"></div>
                         <div class="h-3 w-44 rounded bg-gray-700/35"></div>
                       </div>
-                      <div class="mt-[0.4rem] flex flex-wrap items-center gap-[0.38rem]">
+                      <div
+                        class="mt-[0.4rem] flex flex-wrap items-center gap-[0.38rem]"
+                      >
                         {#each Array(7) as ___, itemIndex (`search-loader-item-${dayIndex}-${cardIndex}-${itemIndex}`)}
-                          <div class="h-6.5 w-6.5 rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-gray-700/40"></div>
+                          <div
+                            class="h-6.5 w-6.5 rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-gray-700/40"
+                          ></div>
                         {/each}
                       </div>
                     </div>
                   </div>
 
-                  <div class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start">
+                  <div
+                    class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start"
+                  >
                     <div class="h-6 w-20 rounded bg-gray-700/50"></div>
                     <div class="h-4 w-16 rounded bg-gray-700/35 mt-2"></div>
                   </div>
 
-                  <div class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3">
+                  <div
+                    class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3"
+                  >
                     <div class="h-5 w-14 rounded-full bg-gray-700/45"></div>
                     <div class="h-4 w-20 rounded bg-gray-700/30"></div>
                     <div class="h-4 w-16 rounded bg-gray-700/30"></div>
@@ -1932,7 +2068,9 @@
     {:else if currentProfile}
       <!-- Profile info -->
       <div class="mb-6 rounded-2xl bg-(--card-bg) p-4 max-sm:p-3">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div
+          class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+        >
           <div class="flex items-center gap-3">
             {#if currentProfile.summoner.profileIconId !== undefined && currentProfile.summoner.profileIconId !== null}
               <img
@@ -1944,20 +2082,34 @@
             {/if}
 
             <div class="min-w-0">
-              <h1 class="text-xl font-bold leading-tight wrap-break-word max-sm:text-lg sm:text-2xl">{profileDisplayName}</h1>
-              <p class="mt-1 text-sm sm:text-base">Level: {currentProfile.summoner.level}</p>
+              <h1
+                class="text-xl font-bold leading-tight wrap-break-word max-sm:text-lg sm:text-2xl"
+              >
+                {profileDisplayName}
+              </h1>
+              <p class="mt-1 text-sm sm:text-base">
+                Level: {currentProfile.summoner.level}
+              </p>
               {#if winRate !== null}
                 <p class="text-sm sm:text-base">Match Win Rate: {winRate}%</p>
               {/if}
             </div>
           </div>
 
-          <div class="rounded-xl border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.7)] p-3 md:min-w-63.75">
-            <p class="text-[0.72rem] uppercase tracking-[0.14em] text-(--text-muted)">Solo/Duo Rank</p>
+          <div
+            class="rounded-xl border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.7)] p-3 md:min-w-63.75"
+          >
+            <p
+              class="text-[0.72rem] uppercase tracking-[0.14em] text-(--text-muted)"
+            >
+              Solo/Duo Rank
+            </p>
             {#if rankedSolo}
               <div class="mt-2 flex items-center gap-3">
                 {#if currentRankIconUrl && !rankIconFailed}
-                  <div class="h-19 w-19 overflow-hidden rounded-full max-sm:h-17 max-sm:w-17">
+                  <div
+                    class="h-19 w-19 overflow-hidden rounded-full max-sm:h-17 max-sm:w-17"
+                  >
                     <img
                       src={currentRankIconUrl}
                       alt={`${rankedLabel} emblem`}
@@ -1967,15 +2119,21 @@
                     />
                   </div>
                 {:else}
-                  <div class="inline-flex h-19 w-19 items-center justify-center rounded-full border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.9)] text-[0.72rem] font-semibold text-(--text-muted) max-sm:h-17 max-sm:w-17">
+                  <div
+                    class="inline-flex h-19 w-19 items-center justify-center rounded-full border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.9)] text-[0.72rem] font-semibold text-(--text-muted) max-sm:h-17 max-sm:w-17"
+                  >
                     UNR
                   </div>
                 {/if}
 
                 <div class="min-w-0">
-                  <p class="text-sm font-semibold text-(--text-primary)">{rankedLabel}</p>
-                  <p class="text-[0.8rem] font-medium text-[#c4b5fd]">{rankedSolo.lp} LP</p>
-          
+                  <p class="text-sm font-semibold text-(--text-primary)">
+                    {rankedLabel}
+                  </p>
+                  <p class="text-[0.8rem] font-medium text-[#c4b5fd]">
+                    {rankedSolo.lp} LP
+                  </p>
+
                   {#if rankIconFailed}
                     <p class="mt-1 text-[0.68rem] text-(--text-muted)">
                       Emblem unavailable (CDN fallback used).
@@ -1993,7 +2151,9 @@
       </div>
 
       {#if tiltState.isTilting && !dismissed}
-        <div class="mb-4 rounded border-l-[3px] border-l-(--accent-loss) bg-[#181321] p-3">
+        <div
+          class="mb-4 rounded border-l-[3px] border-l-(--accent-loss) bg-[#181321] p-3"
+        >
           <div class="flex items-center justify-between gap-3">
             <p class="text-base text-[#fed7e2]">
               {tiltState.streakLength}-game losing streak. Consider taking a
@@ -2014,14 +2174,20 @@
       {/if}
 
       <!-- Filters -->
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch max-md:gap-[0.85rem]">
+      <div
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch max-md:gap-[0.85rem]"
+      >
         <div>
-          <p class="text-[0.72rem] uppercase tracking-[0.16em] text-slate-50">Match history</p>
+          <p class="text-[0.72rem] uppercase tracking-[0.16em] text-slate-50">
+            Match history
+          </p>
           <p class="mt-1 text-[0.8rem] text-slate-50">
             Filter games by champion and matchup (current season Solo/Duo only)
           </p>
         </div>
-        <div class="flex w-full flex-col gap-3 md:ml-auto md:w-auto md:flex-row md:items-center">
+        <div
+          class="flex w-full flex-col gap-3 md:ml-auto md:w-auto md:flex-row md:items-center"
+        >
           <div
             class="relative w-full md:w-64"
             bind:this={championFilterDropdownEl}
@@ -2050,14 +2216,19 @@
             </button>
 
             {#if isChampionFilterOpen}
-              <div class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]">
+              <div
+                class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]"
+              >
                 <button
                   type="button"
                   class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
                   onclick={() => selectChampion(null)}
                 >
                   <div class="inline-flex items-center gap-2">
-                    <span class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)">All</span>
+                    <span
+                      class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)"
+                      >All</span
+                    >
                     <span>All champions</span>
                   </div>
                 </button>
@@ -2115,14 +2286,19 @@
             </button>
 
             {#if isOpponentFilterOpen}
-              <div class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]">
+              <div
+                class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]"
+              >
                 <button
                   type="button"
                   class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedOpponentChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
                   onclick={() => selectOpponentChampion(null)}
                 >
                   <div class="inline-flex items-center gap-2">
-                    <span class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)">Any</span>
+                    <span
+                      class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)"
+                      >Any</span
+                    >
                     <span>Any lane opponent</span>
                   </div>
                 </button>
@@ -2155,20 +2331,31 @@
       <!-- Matches -->
       <div class="flex flex-col gap-7 max-md:gap-4">
         {#if isLoadingInitialMatches}
-          <div class="rounded-xl border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.5)] px-4 py-3 text-sm text-(--text-muted)">
+          <div
+            class="rounded-xl border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.5)] px-4 py-3 text-sm text-(--text-muted)"
+          >
             Loading match history...
           </div>
         {/if}
 
         {#each filteredMatchDays as day (day.dateKey)}
           <section>
-            <div class="mb-2 flex items-center justify-between max-md:flex-wrap max-md:items-start max-md:gap-2">
-              <span class="text-xs uppercase tracking-[0.16em] text-(--text-muted)">{day.dateLabel}</span>
+            <div
+              class="mb-2 flex items-center justify-between max-md:flex-wrap max-md:items-start max-md:gap-2"
+            >
+              <span
+                class="text-xs uppercase tracking-[0.16em] text-(--text-muted)"
+                >{day.dateLabel}</span
+              >
               <div class="flex items-center gap-[0.4rem]">
-                <span class="inline-flex items-center justify-center rounded-full bg-(--badge-win-bg) px-[0.6rem] py-[0.15rem] text-[0.7rem] font-semibold text-(--badge-win-text)">
+                <span
+                  class="inline-flex items-center justify-center rounded-full bg-(--badge-win-bg) px-[0.6rem] py-[0.15rem] text-[0.7rem] font-semibold text-(--badge-win-text)"
+                >
                   {day.wins}W
                 </span>
-                <span class="inline-flex items-center justify-center rounded-full bg-(--badge-loss-bg) px-[0.6rem] py-[0.15rem] text-[0.7rem] font-semibold text-(--badge-loss-text)">
+                <span
+                  class="inline-flex items-center justify-center rounded-full bg-(--badge-loss-bg) px-[0.6rem] py-[0.15rem] text-[0.7rem] font-semibold text-(--badge-loss-text)"
+                >
                   {day.losses}L
                 </span>
               </div>
@@ -2249,9 +2436,7 @@
             <!-- Header with result color coding -->
             <div class="relative mb-4 pr-10">
               <div>
-                <h2 class="text-xl font-bold mb-1">
-                  Journal
-                </h2>
+                <h2 class="text-xl font-bold mb-1">Journal</h2>
                 <p class="text-base text-gray-400">
                   Match: {selectedMatch.kda.kills}/{selectedMatch.kda
                     .deaths}/{selectedMatch.kda.assists} •
@@ -2305,7 +2490,8 @@
                 <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">CS/Min</p>
                   <p
-                    class="text-xl sm:text-2xl font-bold {matchStats.csPerMin > 8
+                    class="text-xl sm:text-2xl font-bold {matchStats.csPerMin >
+                    8
                       ? 'text-green-400'
                       : matchStats.csPerMin > 6
                         ? 'text-lime-400'
@@ -2321,7 +2507,8 @@
                 <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">Gold/Min</p>
                   <p
-                    class="text-xl sm:text-2xl font-bold {matchStats.goldPerMin > 550
+                    class="text-xl sm:text-2xl font-bold {matchStats.goldPerMin >
+                    550
                       ? 'text-green-400'
                       : matchStats.goldPerMin > 450
                         ? 'text-lime-400'
@@ -2337,7 +2524,8 @@
                 <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">Kill Participation</p>
                   <p
-                    class="text-xl sm:text-2xl font-bold {matchStats.kpPercent > 60
+                    class="text-xl sm:text-2xl font-bold {matchStats.kpPercent >
+                    60
                       ? 'text-green-400'
                       : matchStats.kpPercent > 45
                         ? 'text-lime-400'
@@ -2353,7 +2541,8 @@
                 <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">Death Contribution</p>
                   <p
-                    class="text-xl sm:text-2xl font-bold {matchStats.deathPercent < 20
+                    class="text-xl sm:text-2xl font-bold {matchStats.deathPercent <
+                    20
                       ? 'text-green-400'
                       : matchStats.deathPercent < 35
                         ? 'text-lime-400'
@@ -2369,7 +2558,8 @@
                 <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">CS at 10</p>
                   <p
-                    class="text-xl sm:text-2xl font-bold {matchStats.csAt10 === null
+                    class="text-xl sm:text-2xl font-bold {matchStats.csAt10 ===
+                    null
                       ? 'text-gray-500'
                       : matchStats.csAt10 >= 80
                         ? 'text-green-400'
@@ -2382,8 +2572,8 @@
                     {isLoadingTimelineStats && matchStats.csAt10 === null
                       ? "..."
                       : matchStats.csAt10 === null
-                      ? "-"
-                      : matchStats.csAt10.toFixed(0)}
+                        ? "-"
+                        : matchStats.csAt10.toFixed(0)}
                   </p>
                 </div>
 
@@ -2391,7 +2581,8 @@
                 <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
                   <p class="text-base text-gray-400 mb-1">CS at 20</p>
                   <p
-                    class="text-xl sm:text-2xl font-bold {matchStats.csAt20 === null
+                    class="text-xl sm:text-2xl font-bold {matchStats.csAt20 ===
+                    null
                       ? 'text-gray-500'
                       : matchStats.csAt20 >= 165
                         ? 'text-green-400'
@@ -2404,8 +2595,8 @@
                     {isLoadingTimelineStats && matchStats.csAt20 === null
                       ? "..."
                       : matchStats.csAt20 === null
-                      ? "-"
-                      : matchStats.csAt20.toFixed(0)}
+                        ? "-"
+                        : matchStats.csAt20.toFixed(0)}
                   </p>
                 </div>
               </div>
@@ -2416,7 +2607,8 @@
               <label
                 for="emotional-state-slider"
                 class="block text-base font-semibold text-gray-300 mb-2"
-                >How did I feel? ({emotionalState || scoreToEmotion(emotionalStateScore)})</label
+                >How did I feel? ({emotionalState ||
+                  scoreToEmotion(emotionalStateScore)})</label
               >
               <input
                 id="emotional-state-slider"
@@ -2431,12 +2623,15 @@
                   )}
                 class="w-full accent-purple-500"
               />
-              <div class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-gray-400">
+              <div
+                class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-gray-400"
+              >
                 {#each emotionScale as emotion (emotion.score)}
                   <button
                     type="button"
                     class={`rounded px-2 py-1 border transition ${emotion.score === emotionalStateScore ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-gray-700 hover:border-gray-500"}`}
-                    onclick={() => updateEmotionalStateFromSlider(emotion.score)}
+                    onclick={() =>
+                      updateEmotionalStateFromSlider(emotion.score)}
                   >
                     <span>{emotion.score}. {emotion.value}</span>
                   </button>
@@ -2483,7 +2678,9 @@
                   aria-expanded={isLearningObjectiveOpen}
                   aria-controls="learning-objective-listbox"
                 >
-                  <div class="min-w-0 flex-1 flex flex-wrap items-center gap-1.5 pr-2">
+                  <div
+                    class="min-w-0 flex-1 flex flex-wrap items-center gap-1.5 pr-2"
+                  >
                     {#if selectedObjectives.length}
                       {#each selectedObjectives as objective (objective)}
                         <span
@@ -2500,7 +2697,8 @@
                               removeSelectedObjective(objective);
                             }}
                             onkeydown={(event) => {
-                              if (event.key !== "Enter" && event.key !== " ") return;
+                              if (event.key !== "Enter" && event.key !== " ")
+                                return;
                               event.preventDefault();
                               event.stopPropagation();
                               removeSelectedObjective(objective);
@@ -2511,7 +2709,9 @@
                         </span>
                       {/each}
                     {:else}
-                      <span class="text-gray-400">Select one or more objectives...</span>
+                      <span class="text-gray-400"
+                        >Select one or more objectives...</span
+                      >
                     {/if}
                   </div>
                   <ChevronDown
@@ -2530,7 +2730,10 @@
                       <!-- Add New Objective Mode -->
                       <div class="p-3 border-b border-gray-800">
                         <div class="mb-3">
-                          <label for="learning-objective-input" class="block text-sm text-gray-400 mb-2">
+                          <label
+                            for="learning-objective-input"
+                            class="block text-sm text-gray-400 mb-2"
+                          >
                             New Learning Objective
                           </label>
                           <input
@@ -2595,40 +2798,101 @@
                         aria-multiselectable="true"
                       >
                         {#if filteredLearningObjectives.length === 0}
-                          <p class="px-3 py-2 text-base text-gray-400">No objectives found.</p>
+                          <p class="px-3 py-2 text-base text-gray-400">
+                            No objectives found.
+                          </p>
                         {/if}
 
                         {#each filteredLearningObjectives as objective, index (objective)}
-                          <div class="flex items-center border-t border-gray-800">
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={isObjectiveSelected(objective)}
-                              class={`flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 ${isObjectiveSelected(objective)
-                                ? "text-white"
-                                : "text-gray-300"} ${highlightedObjectiveIndex === index
-                                ? "bg-gray-800"
-                                : ""}`}
-                              onclick={() => {
-                                updateObjective(objective);
-                              }}
-                            >
-                              <span class="mr-2 inline-block w-4 text-purple-400"
-                                >{isObjectiveSelected(objective) ? "✓" : ""}</span
+                          <div
+                            class="flex items-center border-t border-gray-800"
+                          >
+                            {#if learningObjectives[editingObjectiveIndex] === objective}
+                              <input
+                                type="text"
+                                bind:this={editingObjectiveInputEl}
+                                bind:value={editingObjectiveInput}
+                                onkeydown={handleEditObjectiveInputKeydown}
+                                aria-label={`Edit objective ${objective}`}
+                                class="flex-1 px-3 py-2 text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                              />
+                              <button
+                                type="button"
+                                class="px-3 py-2 text-green-400 hover:text-green-300 text-sm font-medium cursor-pointer"
+                                aria-label={`Save objective ${objective}`}
+                                onclick={(event) => {
+                                  event.stopPropagation();
+                                  saveEditedObjective();
+                                }}
                               >
-                              {objective}
-                            </button>
-                            <button
-                              type="button"
-                              class="px-3 py-2 text-gray-400 hover:text-red-400 text-xl leading-none cursor-pointer"
-                              aria-label={`Delete objective ${objective}`}
-                              onclick={(event) => {
-                                event.stopPropagation();
-                                deleteLearningObjective(learningObjectives.indexOf(objective));
-                              }}
-                            >
-                              ×
-                            </button>
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                class="px-3 py-2 text-gray-400 hover:text-gray-300 text-sm font-medium cursor-pointer"
+                                aria-label={`Cancel editing objective ${objective}`}
+                                onclick={(event) => {
+                                  event.stopPropagation();
+                                  cancelEditObjective();
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            {:else}
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={isObjectiveSelected(objective)}
+                                class={`flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 ${
+                                  isObjectiveSelected(objective)
+                                    ? "text-white"
+                                    : "text-gray-300"
+                                } ${
+                                  highlightedObjectiveIndex === index
+                                    ? "bg-gray-800"
+                                    : ""
+                                }`}
+                                onclick={() => {
+                                  updateObjective(objective);
+                                }}
+                                ondblclick={(event) => {
+                                  event.stopPropagation();
+                                  void startEditObjective(objective);
+                                }}
+                              >
+                                <span
+                                  class="mr-2 inline-block w-4 text-purple-400"
+                                  >{isObjectiveSelected(objective)
+                                    ? "✓"
+                                    : ""}</span
+                                >
+                                {objective}
+                              </button>
+                              <button
+                                type="button"
+                                class="px-3 py-2 text-blue-400 hover:text-blue-300 text-sm font-medium cursor-pointer"
+                                aria-label={`Edit objective ${objective}`}
+                                onclick={(event) => {
+                                  event.stopPropagation();
+                                  void startEditObjective(objective);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                class="px-3 py-2 text-gray-400 hover:text-red-400 text-xl leading-none cursor-pointer"
+                                aria-label={`Delete objective ${objective}`}
+                                onclick={(event) => {
+                                  event.stopPropagation();
+                                  deleteLearningObjective(
+                                    learningObjectives.indexOf(objective),
+                                  );
+                                }}
+                              >
+                                ×
+                              </button>
+                            {/if}
                           </div>
                         {/each}
                       </div>

@@ -84,7 +84,7 @@
     "relative box-border aspect-square overflow-hidden rounded-full bg-[#1e2538]";
 
   const championImageClass =
-    "h-full w-full rounded-full object-cover object-center block";
+    "h-full w-full rounded-full object-cover object-center block scale-[1.08]";
 
   const roleIconClass =
     "h-3.5 w-3.5 object-contain filter-[brightness(0)_invert(1)]";
@@ -118,7 +118,7 @@
 
   function championDdragonUrl(champion: string): string {
     return championIcon(champion);
-}
+  }
 
   function normalizePositionRole(value?: string | null): string | null {
     if (!value) return null;
@@ -181,7 +181,11 @@
 >
   <div class={cardAccentClass}>
     {#if hasReflection}
-      <div class="absolute right-[1.1rem] top-[0.55rem] rounded-full bg-[rgba(22,163,74,0.18)] px-[0.6rem] py-[0.2rem] text-[0.7rem] font-medium text-[#bbf7d0]">Reflection saved</div>
+      <div
+        class="absolute right-[1.1rem] top-[0.55rem] rounded-full bg-[rgba(22,163,74,0.18)] px-[0.6rem] py-[0.2rem] text-[0.7rem] font-medium text-[#bbf7d0]"
+      >
+        Reflection saved
+      </div>
     {/if}
 
     <div class="flex items-center gap-[1.1rem] max-md:w-full max-md:gap-2.5">
@@ -222,7 +226,9 @@
         </div>
 
         {#if match.allyJungler?.champion}
-          <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
+          <div
+            class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5"
+          >
             <div
               class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${allyRingClass}`}
             >
@@ -286,8 +292,12 @@
 
       <div class="flex flex-col gap-[0.52rem]">
         <div class="flex flex-col gap-[0.32rem]">
-          <span class="text-[0.9rem] font-semibold text-(--text-primary)">{match.champion}</span>
-          <div class="flex items-center gap-[0.4rem] text-[0.78rem] text-(--text-muted)">
+          <span class="text-[0.9rem] font-semibold text-(--text-primary)"
+            >{match.champion}</span
+          >
+          <div
+            class="flex items-center gap-[0.4rem] text-[0.78rem] text-(--text-muted)"
+          >
             <span>{queueLabel}</span>
             <span class="h-0.75 w-0.75 rounded-full bg-(--text-muted)"></span>
             <span>{formattedDuration}</span>
@@ -297,7 +307,9 @@
 
         <div class="mt-[0.4rem] flex items-center gap-[0.38rem]">
           {#each itemSlots as itemId, index (index)}
-            <div class="h-6.5 w-6.5 overflow-hidden rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-[#050816]">
+            <div
+              class="h-6.5 w-6.5 overflow-hidden rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-[#050816]"
+            >
               {#if itemId}
                 <img
                   src={itemIcon(itemId)}
@@ -314,18 +326,24 @@
       </div>
     </div>
 
-      <div class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start">
+    <div
+      class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start"
+    >
       <div class="text-[1.05rem] font-semibold">
         {match.kda.kills} / {match.kda.deaths} / {match.kda.assists}
       </div>
       {#if kdaDisplay}
-        <div class={`mt-[0.2rem] text-[0.84rem] font-medium ${hasGoodKda ? "text-(--kda-good)" : "text-(--kda-avg)"}`}>
+        <div
+          class={`mt-[0.2rem] text-[0.84rem] font-medium ${hasGoodKda ? "text-(--kda-good)" : "text-(--kda-avg)"}`}
+        >
           {kdaDisplay}
         </div>
       {/if}
     </div>
 
-    <div class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3">
+    <div
+      class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3"
+    >
       <div>
         <p class="text-[0.74rem] text-(--text-muted)">CS/m</p>
         <p class="text-[0.94rem] font-semibold">{csPerMin.toFixed(1)}</p>
@@ -351,8 +369,13 @@
       </button>
     </div>
 
-    <div class="order-5 flex min-w-24.5 flex-col items-center gap-[0.35rem] max-md:min-w-0 max-md:items-start">
-      <span class="text-[11px] uppercase leading-none tracking-[0.08em] text-slate-50">VS</span>
+    <div
+      class="order-5 flex min-w-24.5 flex-col items-center gap-[0.35rem] max-md:min-w-0 max-md:items-start"
+    >
+      <span
+        class="text-[11px] uppercase leading-none tracking-[0.08em] text-slate-50"
+        >VS</span
+      >
       <div class="flex items-start gap-1.5 max-md:gap-0">
         {#if match.playerPosition?.toUpperCase() === "JUNGLE"}
           <!-- Player is jungle: show enemy jungler first (larger), then enemy mid (smaller) -->
@@ -394,7 +417,9 @@
           {/if}
 
           {#if match.laneOpponent?.champion}
-            <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
+            <div
+              class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5"
+            >
               <div
                 class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
               >
@@ -469,7 +494,9 @@
           {/if}
 
           {#if match.enemyJungler?.champion}
-            <div class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5">
+            <div
+              class="-ml-1.5 flex flex-col items-center gap-1 max-md:-ml-2.5 max-md:mt-3.5"
+            >
               <div
                 class={`${championCircleBaseClass} h-9.5 w-9.5 max-md:h-8 max-md:w-8 ${enemyRingClass}`}
               >
@@ -516,7 +543,14 @@
       class="rounded-xl border border-[rgba(15,23,42,0.9)] bg-[#020617] px-[1.05rem] py-[0.9rem]"
       transition:slide={{ duration: 150 }}
     >
-      <CoachingPanel {match} {history} {recentMatches} {playerPuuid} {leagueEntry} {learningObjectives} />
+      <CoachingPanel
+        {match}
+        {history}
+        {recentMatches}
+        {playerPuuid}
+        {leagueEntry}
+        {learningObjectives}
+      />
     </div>
   {/if}
 </div>

@@ -1026,7 +1026,7 @@ async function buildMatchSummary(
     ratio:
       participant.deaths > 0
         ? (participant.kills + participant.assists) / participant.deaths
-        : null,
+        : participant.kills + participant.assists,
   };
 
   // Only fetch timeline if explicitly requested (expensive operation)
@@ -1209,7 +1209,7 @@ export async function getMatchDetails(
     ratio:
       participant.deaths > 0
         ? (participant.kills + participant.assists) / participant.deaths
-        : null,
+        : participant.kills + participant.assists,
   };
 
   let timelineCs: { csAt10?: number; csAt20?: number } = {};
