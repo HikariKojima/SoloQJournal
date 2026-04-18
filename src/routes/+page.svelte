@@ -132,6 +132,15 @@
     }
   });
 
+  // Initialize searchedProfile from URL params (auto-load on page mount)
+  $effect(() => {
+    if (data?.profileData && !searchedProfile) {
+      searchedProfile = data.profileData;
+      currentSearchGameName = data.profileData.summoner.gameName;
+      currentSearchTagLine = data.profileData.summoner.tagLine;
+    }
+  });
+
   const gameNamePlaceholder = $derived.by(() => {
     const found = regionOptions.find((r) => r.value === selectedRegion);
     return found ? found.gameNameExample : "Takir";
