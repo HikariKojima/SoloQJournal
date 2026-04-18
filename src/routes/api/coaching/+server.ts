@@ -7,6 +7,7 @@ import {
   getRateLimitHeaders,
   getRetryAfterSeconds,
 } from "$lib/server/rate-limit";
+import { validateCoachingPayload } from "$lib/server/validation";
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 5;
@@ -54,15 +55,30 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
     payload = await request.json();
   } catch (err) {
-    return new Response("Invalid JSON body", { status: 400 });
+    return new Response("Invalid JSON body", {
+      status: 400,
+      headers: rateLimitHeaders,
+    });
   }
+
+  const validation = validateCoachingPayload(payload);
+  if (!validation.ok) {
+    return new Response(validation.error, {
+      status: 400,
+      headers: rateLimitHeaders,
+    });
+  }
+
+  payload = validation.value;
 
   try {
     const generator = streamCoachingReview(payload);
     const encoder = new TextEncoder();
     const firstChunkStartMs = performance.now();
     const first = await generator.next();
-    const firstChunkElapsedMs = Math.round(performance.now() - firstChunkStartMs);
+    const firstChunkElapsedMs = Math.round(
+      performance.now() - firstChunkStartMs,
+    );
 
     console.info(
       `[COACHING][API_FIRST_CHUNK] firstChunkMs=${firstChunkElapsedMs} totalToFirstChunkMs=${Math.round(performance.now() - requestStartMs)}`,

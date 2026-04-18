@@ -29,7 +29,10 @@ function getCacheKey(...parts: string[]): string {
   return parts.join("::");
 }
 
-function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+function getCached<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+): T | null {
   const entry = cache.get(key);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) {
@@ -39,7 +42,11 @@ function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null 
   return entry.data;
 }
 
-function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
+function setCached<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  data: T,
+): void {
   cache.set(key, {
     data,
     expiresAt: Date.now() + CACHE_TTL_MS,
@@ -102,7 +109,9 @@ function getAccountRegionalBase(platform: string): string {
   if (["eun1", "euw1", "tr1", "ru"].includes(platform)) {
     return "https://europe.api.riotgames.com";
   }
-  if (["jp1", "kr", "oc1", "ph2", "sg2", "th2", "tw2", "vn2"].includes(platform)) {
+  if (
+    ["jp1", "kr", "oc1", "ph2", "sg2", "th2", "tw2", "vn2"].includes(platform)
+  ) {
     return "https://asia.api.riotgames.com";
   }
   return "https://europe.api.riotgames.com";
@@ -141,14 +150,29 @@ function initializeBucketsForRegion(region: string): void {
     rateLimitBuckets.set(
       limitKey,
       new Map([
-        ["perSecond", { tokens: RATE_LIMIT_CONFIG.PER_SECOND.tokens, lastRefillMs: Date.now() }],
-        ["perTwoMin", { tokens: RATE_LIMIT_CONFIG.PER_TWO_MIN.tokens, lastRefillMs: Date.now() }],
+        [
+          "perSecond",
+          {
+            tokens: RATE_LIMIT_CONFIG.PER_SECOND.tokens,
+            lastRefillMs: Date.now(),
+          },
+        ],
+        [
+          "perTwoMin",
+          {
+            tokens: RATE_LIMIT_CONFIG.PER_TWO_MIN.tokens,
+            lastRefillMs: Date.now(),
+          },
+        ],
       ]),
     );
   }
 }
 
-function refillBucket(bucket: RateLimitBucket, config: { tokens: number; windowMs: number }): void {
+function refillBucket(
+  bucket: RateLimitBucket,
+  config: { tokens: number; windowMs: number },
+): void {
   const now = Date.now();
   const elapsed = now - bucket.lastRefillMs;
   const refillAmount = (elapsed / config.windowMs) * config.tokens;
@@ -172,8 +196,14 @@ async function waitForRateLimit(region: string): Promise<void> {
   let waitMs = 0;
   while (perSecBucket.tokens < 1 || perTwoMinBucket.tokens < 1) {
     waitMs = Math.min(
-      perSecBucket.tokens < 1 ? RATE_LIMIT_CONFIG.PER_SECOND.windowMs / RATE_LIMIT_CONFIG.PER_SECOND.tokens : Infinity,
-      perTwoMinBucket.tokens < 1 ? RATE_LIMIT_CONFIG.PER_TWO_MIN.windowMs / RATE_LIMIT_CONFIG.PER_TWO_MIN.tokens : Infinity,
+      perSecBucket.tokens < 1
+        ? RATE_LIMIT_CONFIG.PER_SECOND.windowMs /
+            RATE_LIMIT_CONFIG.PER_SECOND.tokens
+        : Infinity,
+      perTwoMinBucket.tokens < 1
+        ? RATE_LIMIT_CONFIG.PER_TWO_MIN.windowMs /
+            RATE_LIMIT_CONFIG.PER_TWO_MIN.tokens
+        : Infinity,
     );
 
     if (waitMs > 0 && isFinite(waitMs)) {
@@ -239,7 +269,9 @@ async function riotFetch(
       if (res.status === 429) {
         // Rate limited - check Retry-After header
         const retryAfter = res.headers.get("Retry-After");
-        const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : NaN;
+        const retryAfterSeconds = retryAfter
+          ? Number.parseInt(retryAfter, 10)
+          : NaN;
         const waitTime =
           Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
             ? retryAfterSeconds * 1000
@@ -415,7 +447,10 @@ function computeObjectiveWindows(objectives: ObjectiveEvent[]): Array<{
   minute: number;
   type: "early" | "dragon" | "grubs" | "baron" | "herald";
 }> {
-  const windows: Array<{ minute: number; type: "early" | "dragon" | "grubs" | "baron" | "herald" }> = [];
+  const windows: Array<{
+    minute: number;
+    type: "early" | "dragon" | "grubs" | "baron" | "herald";
+  }> = [];
 
   // Fixed anchors (Season 16 timings)
   windows.push({ minute: 3, type: "early" });
@@ -441,8 +476,14 @@ function computeObjectiveWindows(objectives: ObjectiveEvent[]): Array<{
 
 function findNearestObjective(
   fightMinute: number,
-  windows: Array<{ minute: number; type: "early" | "dragon" | "grubs" | "baron" | "herald" }>,
-): { objectiveType: "early" | "dragon" | "grubs" | "baron" | "herald"; objectiveMinute: number } | null {
+  windows: Array<{
+    minute: number;
+    type: "early" | "dragon" | "grubs" | "baron" | "herald";
+  }>,
+): {
+  objectiveType: "early" | "dragon" | "grubs" | "baron" | "herald";
+  objectiveMinute: number;
+} | null {
   const TOLERANCE = 1.5; // ±90 seconds
 
   let nearest = null;
@@ -456,7 +497,9 @@ function findNearestObjective(
     }
   }
 
-  return nearest ? { objectiveType: nearest.type, objectiveMinute: nearest.minute } : null;
+  return nearest
+    ? { objectiveType: nearest.type, objectiveMinute: nearest.minute }
+    : null;
 }
 
 function buildMajorTeamfights(
@@ -484,7 +527,9 @@ function buildMajorTeamfights(
         killerId: Number(event?.killerId ?? 0),
         victimId: Number(event?.victimId ?? 0),
         assistingParticipantIds: Array.isArray(event?.assistingParticipantIds)
-          ? event.assistingParticipantIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id))
+          ? event.assistingParticipantIds
+              .map((id: unknown) => Number(id))
+              .filter((id: number) => Number.isFinite(id))
           : [],
         position: event?.position,
       });
@@ -555,10 +600,15 @@ function buildMajorTeamfights(
       // Require at least 3 participants from each team to treat this as a major fight.
       const playerTeam = playerTeamIsA ? teamAChampions : teamBChampions;
       const enemyTeam = playerTeamIsA ? teamBChampions : teamAChampions;
-      
+
       if (playerTeam.size < 3 || enemyTeam.size < 3) {
         return null; // Filter out this cluster
       }
+
+      const enemyKillEvents = cluster.filter((event) => {
+        const victimOnTeamA = event.victimId <= 5;
+        return playerTeamIsA ? !victimOnTeamA : victimOnTeamA;
+      }).length;
 
       const firstTs = cluster[0].timestamp;
       const lastTs = cluster[cluster.length - 1].timestamp;
@@ -587,17 +637,21 @@ function buildMajorTeamfights(
         }
       }
 
-      const mapZone = Array.from(mapZoneVotes.entries()).sort(
-        (a, b) => b[1] - a[1],
-      )[0]?.[0] ?? "unknown";
+      const mapZone =
+        Array.from(mapZoneVotes.entries()).sort(
+          (a, b) => b[1] - a[1],
+        )[0]?.[0] ?? "unknown";
 
       const fightStartMinute = roundTo(firstTs / 60000, 1);
-      const objectiveContext = findNearestObjective(fightStartMinute, objectiveWindows);
+      const objectiveContext = findNearestObjective(
+        fightStartMinute,
+        objectiveWindows,
+      );
 
       const result: MatchTimelineInsights["majorTeamfights"][number] = {
         startMinute: fightStartMinute,
         endMinute: roundTo(lastTs / 60000, 1),
-        killEvents: cluster.length,
+        killEvents: enemyKillEvents,
         mapZone,
         playerInvolved,
         playerTakedowns,
@@ -660,20 +714,36 @@ function buildCsDropAfterDeath(
     return (endCs - startCs) / (endMinute - startMinute);
   };
 
-  return deathTimestampsMs.map((timestampMs) => {
+  const orderedDeathTimestampsMs = [...deathTimestampsMs]
+    .map((timestampMs) => Number(timestampMs))
+    .filter((timestampMs) => Number.isFinite(timestampMs))
+    .sort((a, b) => a - b);
+
+  return orderedDeathTimestampsMs.map((timestampMs, index) => {
     const deathMinute = roundTo(timestampMs / 60000, 1);
     const anchorMinute = Math.max(
       0,
       Math.min(lastMinute, Math.floor(timestampMs / 60000)),
     );
+    const nextDeathTimestampMs = orderedDeathTimestampsMs[index + 1] ?? null;
 
     const preStart = Math.max(0, anchorMinute - 3);
     const preEnd = anchorMinute;
-    const postStart = anchorMinute;
-    const postEnd = Math.min(lastMinute, anchorMinute + 3);
+    const estimatedRespawnMinute = Math.ceil((timestampMs + 45_000) / 60000);
+    const postStart = Math.max(0, Math.min(lastMinute, estimatedRespawnMinute));
+    let postEnd = Math.min(lastMinute, postStart + 3);
+
+    if (typeof nextDeathTimestampMs === "number") {
+      const nextDeathMinute = Math.floor(nextDeathTimestampMs / 60000);
+      postEnd = Math.min(postEnd, Math.max(postStart, nextDeathMinute));
+    }
+
+    const hasAliveWindow = postEnd - postStart >= 1;
 
     const preDeathCsPerMin = readCsPerMinWindow(preStart, preEnd);
-    const postDeathCsPerMin = readCsPerMinWindow(postStart, postEnd);
+    const postDeathCsPerMin = hasAliveWindow
+      ? readCsPerMinWindow(postStart, postEnd)
+      : null;
 
     const dropPerMin =
       preDeathCsPerMin !== null && postDeathCsPerMin !== null
@@ -714,7 +784,11 @@ function getBiggestCsDropWindow(
     return laneCs + jungleCs;
   };
 
-  let biggestDrop: { startMinute: number; endMinute: number; dropPerMin: number } | null = null;
+  let biggestDrop: {
+    startMinute: number;
+    endMinute: number;
+    dropPerMin: number;
+  } | null = null;
 
   for (let minute = 3; minute <= lastMinute - 3; minute++) {
     const preStart = minute - 3;
@@ -877,7 +951,9 @@ async function buildMatchSummary(
   const url = `${regionalBase}/lol/match/v5/matches/${matchId}`;
   const data = await riotFetch(url, true);
 
-  const participant = data.info.participants.find((p: any) => p.puuid === puuid);
+  const participant = data.info.participants.find(
+    (p: any) => p.puuid === puuid,
+  );
   if (!participant) return null;
 
   const playerPosition = getPosition(participant);
@@ -912,12 +988,13 @@ async function buildMatchSummary(
           : findTeammateByPositions("JUNGLE");
   const laneOpponentParticipant =
     playerPositionUpper === "JUNGLE"
-      ? enemyParticipants.find((p: any) => {
+      ? (enemyParticipants.find((p: any) => {
           const pos = getPosition(p).toUpperCase();
           return pos === "MIDDLE" || pos === "MID";
-        }) ?? null
-      : enemyParticipants.find((p: any) => getPosition(p) === playerPosition) ??
-        null;
+        }) ?? null)
+      : (enemyParticipants.find(
+          (p: any) => getPosition(p) === playerPosition,
+        ) ?? null);
   const enemyJunglerParticipant =
     enemyParticipants.find((p: any) => getPosition(p) === "JUNGLE") ?? null;
 
@@ -939,7 +1016,8 @@ async function buildMatchSummary(
     teamDamageToChamps > 0
       ? roundTo((damageToChamps / teamDamageToChamps) * 100, 2)
       : undefined;
-  const playedAt = data.info.gameEndTimestamp ?? data.info.gameStartTimestamp ?? null;
+  const playedAt =
+    data.info.gameEndTimestamp ?? data.info.gameStartTimestamp ?? null;
 
   const kda = {
     kills: participant.kills,
@@ -954,7 +1032,11 @@ async function buildMatchSummary(
   // Only fetch timeline if explicitly requested (expensive operation)
   let timelineCs: { csAt10?: number; csAt20?: number } = {};
   if (includeTimeline) {
-    timelineCs = await getTimelineCsAt(region, matchId, participant.participantId);
+    timelineCs = await getTimelineCsAt(
+      region,
+      matchId,
+      participant.participantId,
+    );
   }
 
   return {
@@ -989,7 +1071,9 @@ async function buildMatchSummary(
       participant.item4,
       participant.item5,
       participant.item6,
-    ].filter((id: number | null | undefined) => typeof id === "number" && id > 0),
+    ].filter(
+      (id: number | null | undefined) => typeof id === "number" && id > 0,
+    ),
     summonerSpells: {
       primary: participant.summoner1Id,
       secondary: participant.summoner2Id,
@@ -1049,9 +1133,7 @@ export async function getRankedSoloEntry(
       tier: String(soloEntry.tier ?? "UNRANKED").toUpperCase(),
       rank: String(soloEntry.rank ?? "").toUpperCase(),
       lp:
-        typeof soloEntry.leaguePoints === "number"
-          ? soloEntry.leaguePoints
-          : 0,
+        typeof soloEntry.leaguePoints === "number" ? soloEntry.leaguePoints : 0,
       wins: typeof soloEntry.wins === "number" ? soloEntry.wins : 0,
       losses: typeof soloEntry.losses === "number" ? soloEntry.losses : 0,
     };
@@ -1197,7 +1279,12 @@ export async function getFilteredMatchPage(
   const effectiveBatchSize = Math.max(1, Math.min(INTERNAL_BATCH_SIZE, count));
 
   while (!exhausted && !reachedSeasonBoundary && summaries.length < count) {
-    const matchIds = await getMatchIds(region, puuid, cursor, effectiveBatchSize);
+    const matchIds = await getMatchIds(
+      region,
+      puuid,
+      cursor,
+      effectiveBatchSize,
+    );
     if (!matchIds.length) {
       exhausted = true;
       break;
@@ -1209,7 +1296,7 @@ export async function getFilteredMatchPage(
     const summaryPromises = matchIds.map((matchId) =>
       buildMatchSummary(region, puuid, matchId, false).catch(() => {
         return null;
-      })
+      }),
     );
 
     const batchSummaries = await Promise.all(summaryPromises);
@@ -1304,6 +1391,10 @@ export async function getFullProfile(
     return { summoner, matches };
   }
 
-  const rankedSolo = await getRankedSoloEntry(region, summoner.id, account.puuid);
+  const rankedSolo = await getRankedSoloEntry(
+    region,
+    summoner.id,
+    account.puuid,
+  );
   return { summoner, matches, rankedSolo };
 }

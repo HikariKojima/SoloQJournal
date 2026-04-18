@@ -1,4 +1,8 @@
-import type { MatchSummaryResponse } from "$lib/types";
+import type {
+  MatchSummaryResponse,
+  TimelineCsDropAfterDeath,
+  TimelineMajorFight,
+} from "$lib/types";
 
 export type LeagueEntry = {
   tier: string;
@@ -28,26 +32,13 @@ export type TimelineCoachingSignals = {
   csAt10: number | null;
   csAt20: number | null;
   deathTimestampsMinutes: number[];
-  csDropAfterDeaths: Array<{
-    deathMinute: number;
-    preDeathCsPerMin: number | null;
-    postDeathCsPerMin: number | null;
-    dropPerMin: number | null;
-  }>;
+  csDropAfterDeaths: TimelineCsDropAfterDeath[];
   biggestCsDropWindow: {
     startMinute: number;
     endMinute: number;
     dropPerMin: number;
   } | null;
-  majorTeamfights: Array<{
-    startMinute: number;
-    endMinute: number;
-    killEvents: number;
-    mapZone: string;
-    playerInvolved: boolean;
-    playerTakedowns: number;
-    playerDeaths: number;
-  }>;
+  majorTeamfights: TimelineMajorFight[];
 };
 
 export type CoachingPayload = {
@@ -142,7 +133,8 @@ export function buildHistoryStats(
     totalDeaths += match.kda.deaths;
 
     if (match.teamKills > 0) {
-      const kp = ((match.kda.kills + match.kda.assists) / match.teamKills) * 100;
+      const kp =
+        ((match.kda.kills + match.kda.assists) / match.teamKills) * 100;
       totalKP += kp;
       kpValues.push(kp);
     } else {
@@ -277,7 +269,11 @@ export function buildCoachingPayload(
   const payload: CoachingPayload = {
     game: {
       champion: match.champion,
-      role: match.playerPosition || match.playerRole || history.primaryRole || "UNKNOWN",
+      role:
+        match.playerPosition ||
+        match.playerRole ||
+        history.primaryRole ||
+        "UNKNOWN",
       win: match.result === "win",
       kills: match.kda.kills,
       deaths: match.kda.deaths,

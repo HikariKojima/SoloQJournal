@@ -9,7 +9,7 @@ if (!GEMINI_API_KEY) {
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const SYSTEM_PROMPT =
-  "You are a League of Legends performance coach. Analyze using only provided data. Direct execution review grounded in numbers and timestamps.\n\nKEY RULES:\n- Every point = 2+ numbers from THIS GAME.\n- One-off vs habit: use history patterns (>=40% = recurring).\n- Prioritize: CS trends > deaths timing > teamfight involvement > objectives.\n- Objective misses = advisory (for example: fights to review at 14:06), not blame.\n- Locations: use 'dragon', 'baron', 'top side river', or 'bot side river'. Never say 'dragon side river' or 'baron side river'.\n- No vision score, wards, or end-game gold talk.\n- CS drops >=1.0/min major; <0.6 = noise.\n- Rank calibration: Iron-Gold simple; Platinum-Emerald more precise; Emerald+ even more precise; Master+ as precise as possible if it improves accuracy.\n- Max 350 words. No filler.\n- Write only the answer for each header. Do not repeat or quote these instruction lines.\n\nOUTPUT (exact headers, strict order):\n## Learning objective\nState whether the objective was executed and back it with numbers.\n## Analytical questions\nCS, teamfights, damage. Include exactly one line starting with \"Fights to review:\" plus 1-3 timestamps.\n## What went wrong\n2-3 bullets, 2+ numbers each. Frame objectives as opportunities.\n## Your biggest habit to fix\n1 habit + why (vs history) + impact.\n## What you did well\n1-2 bullets, metric-backed.\n## One thing to focus on next game\n- Exactly 1 bullet only.\n- 1 drill only in this format: Trigger->Action->Timing->Metric.\n- This is the only primary action item.\n- Dragon/Baron timing: \"1:30 before spawn\" (never 1:00).\n## One more thing to be mindful of\n- 0 or 1 bullet only.\n- Short caution to keep in mind (secondary priority, not another drill).\n- Do not use Trigger->Action->Timing->Metric format here.\n- Do not add bold formatting in this section.";
+  "You are a League of Legends performance coach. Analyze using only provided data. Direct execution review grounded in numbers and timestamps.\n\nKEY RULES:\n- Every point = 2+ numbers from THIS GAME.\n- One-off vs habit: use history patterns (>=40% = recurring).\n- Prioritize: CS trends > deaths timing > teamfight involvement > objectives.\n- Objective misses = advisory (for example: fights to review at 14:06), not blame.\n- Locations: use 'dragon', 'baron', 'top side river', or 'bot side river'. Never say 'dragon side river' or 'baron side river'.\n- No vision score, wards, or end-game gold talk.\n- CS drops >=1.0/min major; <0.6 = noise.\n- Rank calibration: Iron-Gold simple; Platinum-Emerald more precise; Emerald+ even more precise; Master+ as precise as possible if it improves accuracy.\n- Max 350 words. No filler.\n- Write only the answer for each header. Do not repeat or quote these instruction lines.\n\nOUTPUT (exact headers, strict order):\n## Learning objective\nState whether the objective was executed and back it with numbers.\n## Analytical questions\nCS, teamfights, damage. Include exactly one line starting with \"Fights to review:\" plus 1-3 fight timestamps (actual fight time windows). Append \"(go back 60s and review)\" to each listed fight.\n## What went wrong\n2-3 bullets, 2+ numbers each. Frame objectives as opportunities.\n## Your biggest habit to fix\n1 habit + why (vs history) + impact.\n## What you did well\n1-2 bullets, metric-backed.\n## One thing to focus on next game\n- Exactly 1 bullet only.\n- 1 drill only in this format: Trigger->Action->Timing->Metric.\n- This is the only primary action item.\n- Dragon/Baron timing: \"1:30 before spawn\" (never 1:00).\n## One more thing to be mindful of\n- 0 or 1 bullet only.\n- Short caution to keep in mind (secondary priority, not another drill).\n- Do not use Trigger->Action->Timing->Metric format here.\n- Do not add bold formatting in this section.";
 
 const COACHING_MODELS = [
   "gemini-2.5-flash",
@@ -130,6 +130,17 @@ export async function* streamCoachingReview(
   payload: CoachingPayload,
 ): AsyncGenerator<string, void, unknown> {
   const reviewStartMs = performance.now();
+  const deathTimestampsMinutes = Array.isArray(
+    payload.game.deathTimestampsMinutes,
+  )
+    ? payload.game.deathTimestampsMinutes
+    : [];
+  const csDropAfterDeaths = Array.isArray(payload.game.csDropAfterDeaths)
+    ? payload.game.csDropAfterDeaths
+    : [];
+  const majorTeamfights = Array.isArray(payload.game.majorTeamfights)
+    ? payload.game.majorTeamfights
+    : [];
   const toValue = (value: number | null | undefined): string => {
     return typeof value === "number" ? String(value) : "N/A";
   };
@@ -156,8 +167,8 @@ export async function* streamCoachingReview(
     payload.game.damageTaken,
     payload.game.csVsOpponent,
     payload.game.goldDiff15,
-    payload.game.deathTimestampsMinutes.length,
-    payload.game.csDropAfterDeaths.length,
+    deathTimestampsMinutes.length,
+    csDropAfterDeaths.length,
     payload.game.dragonKills,
     payload.game.baronKills,
     payload.game.objectivesStolen,
@@ -175,8 +186,8 @@ export async function* streamCoachingReview(
     dataConfidence = "MEDIUM";
   }
 
-  const csDropAfterDeathsText = payload.game.csDropAfterDeaths.length
-    ? payload.game.csDropAfterDeaths
+  const csDropAfterDeathsText = csDropAfterDeaths.length
+    ? csDropAfterDeaths
         .map((drop) => {
           const pre =
             typeof drop.preDeathCsPerMin === "number"
@@ -195,7 +206,7 @@ export async function* streamCoachingReview(
         .join(" | ")
     : "N/A";
 
-  const majorCsDrops = payload.game.csDropAfterDeaths.filter(
+  const majorCsDrops = csDropAfterDeaths.filter(
     (drop) => typeof drop.dropPerMin === "number" && drop.dropPerMin >= 1,
   );
 
@@ -208,10 +219,10 @@ export async function* streamCoachingReview(
         .join(", ")
     : "None";
 
-  const majorTeamfightsText = payload.game.majorTeamfights.filter(
+  const majorTeamfightsText = majorTeamfights.filter(
     (fight) => fight.startMinute >= 3,
   ).length
-    ? payload.game.majorTeamfights
+    ? majorTeamfights
         .filter((fight) => fight.startMinute >= 3)
         .map((fight) => {
           const involvement = fight.playerInvolved
@@ -225,18 +236,33 @@ export async function* streamCoachingReview(
         .join(" | ")
     : "N/A";
 
-  const objectiveReviewFights = payload.game.majorTeamfights.filter(
-    (fight) => fight.startMinute >= 3 && !fight.playerInvolved && !!fight.objectiveContext,
-  );
+  const objectiveReviewFights = majorTeamfights
+    .filter(
+      (fight) =>
+        fight.startMinute >= 3 &&
+        !fight.playerInvolved &&
+        !!fight.objectiveContext,
+    )
+    .sort((a, b) => a.startMinute - b.startMinute);
 
-  const objectiveReviewFightsText = objectiveReviewFights.length
-    ? objectiveReviewFights
-        .slice(0, 4)
+  const fallbackReviewFights = majorTeamfights
+    .filter((fight) => fight.startMinute >= 3 && !fight.playerInvolved)
+    .sort((a, b) => a.startMinute - b.startMinute);
+
+  const reviewCandidates = (
+    objectiveReviewFights.length ? objectiveReviewFights : fallbackReviewFights
+  ).slice(0, 3);
+
+  const objectiveReviewFightsText = reviewCandidates.length
+    ? reviewCandidates
         .map((fight) => {
+          const fightWindow = `${formatMinutesSeconds(fight.startMinute)}-${formatMinutesSeconds(fight.endMinute)}`;
           const context = fight.objectiveContext;
-          if (!context) return "";
+          if (!context) {
+            return `${fightWindow} (go back 60s and review)`;
+          }
 
-          return `${formatMinutesSeconds(fight.startMinute)} (${context.objectiveType}, ${context.teamSecuredIt ? "team secured" : "team denied"}, ${fight.killEvents} kills)`;
+          return `${fightWindow} ${context.objectiveType} fight (${context.teamSecuredIt ? "team secured" : "team denied"}, ${fight.killEvents} enemy kills) (go back 60s and review)`;
         })
         .filter(Boolean)
         .join(", ")
@@ -252,7 +278,7 @@ export async function* streamCoachingReview(
     ? `\n\n=== MY LEARNING OBJECTIVES ===\n${payload.learningObjectives.map((obj, i) => `${i + 1}. ${obj}`).join("\n")}`
     : "";
 
-  const userMessage = `${payload.context.summonerName} | ${payload.context.tier} ${payload.context.rank}\n${payload.game.champion} (${payload.game.role}) | ${payload.game.win ? "WIN" : "LOSS"} ${payload.game.gameDurationMinutes}m\n\nGAME:\nKDA: ${payload.game.kills}/${payload.game.deaths}/${payload.game.assists}\nCS: ${payload.game.csTotal} (${payload.game.csPerMin}/min)${payload.game.csVsOpponent !== null ? ` | ${payload.game.csVsOpponent > 0 ? "+" : ""}${payload.game.csVsOpponent} vs opp` : ""}\n@10/20: ${toValue(payload.game.csAt10)}/${toValue(payload.game.csAt20)}\nDeaths: ${payload.game.deathTimestampsMinutes.length ? payload.game.deathTimestampsMinutes.map((m) => formatMinutesSeconds(m)).join(", ") : "N/A"}\nCS drops: ${majorCsDropsText}\nTeamfights: ${majorTeamfightsText}\nGaps: ${objectiveReviewFightsText}\nDamage: ${toValue(payload.game.damageDealt)} (${toPercent(payload.game.damageShare)} team)\nKP: ${payload.game.killParticipation}%${payload.game.goldDiff15 !== null ? `\n@15 gold: ${payload.game.goldDiff15 > 0 ? "+" : ""}${payload.game.goldDiff15}` : ""}\nObj: ${toValue(payload.game.dragonKills)}D/${toValue(payload.game.baronKills)}B\n\nHISTORY (${payload.history.sampleSize}g):\nCS avg: ${payload.history.avgCsPerMin} (Δ${payload.game.csPerMin - payload.history.avgCsPerMin > 0 ? "+" : ""}${(payload.game.csPerMin - payload.history.avgCsPerMin).toFixed(1)})\nKP: ${payload.history.avgKillParticipation}% | Deaths: ${payload.history.avgDeaths}\nPatterns: ${payload.history.belowAvgCsGames}/${payload.history.sampleSize} low CS | ${payload.history.highDeathGames}/${payload.history.sampleSize} high deaths${payload.history.recurringFirstDeathWindow ? `\nFirst death: ${payload.history.recurringFirstDeathWindow} (${toPercent(payload.history.recurringFirstDeathRate)})` : ""}\nWR: ${payload.history.winRate}% | Form: ${payload.history.recentForm}${learningObjectivesText}\n\nConfidence: ${dataConfidence}`;
+  const userMessage = `${payload.context.summonerName} | ${payload.context.tier} ${payload.context.rank}\n${payload.game.champion} (${payload.game.role}) | ${payload.game.win ? "WIN" : "LOSS"} ${payload.game.gameDurationMinutes}m\n\nGAME:\nKDA: ${payload.game.kills}/${payload.game.deaths}/${payload.game.assists}\nCS: ${payload.game.csTotal} (${payload.game.csPerMin}/min)${payload.game.csVsOpponent !== null ? ` | ${payload.game.csVsOpponent > 0 ? "+" : ""}${payload.game.csVsOpponent} vs opp` : ""}\n@10/20: ${toValue(payload.game.csAt10)}/${toValue(payload.game.csAt20)}\nDeaths: ${deathTimestampsMinutes.length ? deathTimestampsMinutes.map((m) => formatMinutesSeconds(m)).join(", ") : "N/A"}\nCS drops (alive windows only): ${majorCsDropsText}\nTeamfights: ${majorTeamfightsText}\nFights to review (actual fight timestamps): ${objectiveReviewFightsText}\nDamage: ${toValue(payload.game.damageDealt)} (${toPercent(payload.game.damageShare)} team)\nKP: ${payload.game.killParticipation}%${payload.game.goldDiff15 !== null ? `\n@15 gold: ${payload.game.goldDiff15 > 0 ? "+" : ""}${payload.game.goldDiff15}` : ""}\nObj: ${toValue(payload.game.dragonKills)}D/${toValue(payload.game.baronKills)}B\n\nHISTORY (${payload.history.sampleSize}g):\nCS avg: ${payload.history.avgCsPerMin} (Δ${payload.game.csPerMin - payload.history.avgCsPerMin > 0 ? "+" : ""}${(payload.game.csPerMin - payload.history.avgCsPerMin).toFixed(1)})\nKP: ${payload.history.avgKillParticipation}% | Deaths: ${payload.history.avgDeaths}\nPatterns: ${payload.history.belowAvgCsGames}/${payload.history.sampleSize} low CS | ${payload.history.highDeathGames}/${payload.history.sampleSize} high deaths${payload.history.recurringFirstDeathWindow ? `\nFirst death: ${payload.history.recurringFirstDeathWindow} (${toPercent(payload.history.recurringFirstDeathRate)})` : ""}\nWR: ${payload.history.winRate}% | Form: ${payload.history.recentForm}${learningObjectivesText}\n\nConfidence: ${dataConfidence}`;
 
   let stream: AsyncGenerator<{ text?: string }> | null = null;
   let lastError: unknown;
@@ -318,7 +344,9 @@ export async function* streamCoachingReview(
       throw overloadedError;
     }
 
-    throw lastError ?? new Error("No supported Gemini model found for streaming");
+    throw (
+      lastError ?? new Error("No supported Gemini model found for streaming")
+    );
   }
 
   console.info(
