@@ -136,8 +136,12 @@
   $effect(() => {
     if (data?.profileData && !searchedProfile) {
       searchedProfile = data.profileData;
-      currentSearchGameName = data.profileData.summoner.gameName;
-      currentSearchTagLine = data.profileData.summoner.tagLine;
+      if (browser) {
+        const params = new URLSearchParams(window.location.search);
+        currentSearchGameName = params.get("gameName")?.trim() ?? "";
+        currentSearchTagLine =
+          params.get("tagLine")?.trim().replace(/^#+/, "") ?? "";
+      }
     }
   });
 
