@@ -132,6 +132,19 @@
     }
   });
 
+  // Initialize searchedProfile from URL params (auto-load on page mount)
+  $effect(() => {
+    if (data?.profileData && !searchedProfile) {
+      searchedProfile = data.profileData;
+      if (browser) {
+        const params = new URLSearchParams(window.location.search);
+        currentSearchGameName = params.get("gameName")?.trim() ?? "";
+        currentSearchTagLine =
+          params.get("tagLine")?.trim().replace(/^#+/, "") ?? "";
+      }
+    }
+  });
+
   const gameNamePlaceholder = $derived.by(() => {
     const found = regionOptions.find((r) => r.value === selectedRegion);
     return found ? found.gameNameExample : "Takir";

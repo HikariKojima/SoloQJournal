@@ -23,6 +23,8 @@ export const load: PageServerLoad = async ({ url }) => {
   const gameName = url.searchParams.get("gameName");
   const tagLine = url.searchParams.get("tagLine");
   const platform = url.searchParams.get("platform") ?? "euw1";
+  const searchGameName = gameName?.trim() ?? "";
+  const searchTagLine = tagLine?.trim().replace(/^#+/, "") ?? "";
 
   let profileData: ProfileData = null;
   
@@ -41,5 +43,11 @@ export const load: PageServerLoad = async ({ url }) => {
     }
   }
 
-  return { profileData, platform, ddragonVersion };
+  return {
+    profileData,
+    platform,
+    ddragonVersion,
+    searchGameName,
+    searchTagLine,
+  };
 };
