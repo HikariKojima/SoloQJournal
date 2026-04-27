@@ -31,6 +31,34 @@
         background-color: var(--page-bg);
         color: var(--text-primary);
     }
+
+    html {
+        scrollbar-width: thin;
+        scrollbar-color: #7c3aed #0c0e14;
+    }
+
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    html::-webkit-scrollbar-track,
+    body::-webkit-scrollbar-track {
+        background: #0c0e14;
+    }
+
+    html::-webkit-scrollbar-thumb,
+    body::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+        border-radius: 9999px;
+        border: 2px solid #0c0e14;
+    }
+
+    html::-webkit-scrollbar-thumb:hover,
+    body::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 100%);
+    }
 }
 
 body.modal-open {
@@ -60,6 +88,30 @@ body.modal-open {
 
 .journal-modal::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+}
+
+.saved-profiles-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: #7c3aed #111322;
+}
+
+.saved-profiles-sidebar::-webkit-scrollbar {
+    width: 10px;
+}
+
+.saved-profiles-sidebar::-webkit-scrollbar-track {
+    background: #111322;
+    border-radius: 9999px;
+}
+
+.saved-profiles-sidebar::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+    border-radius: 9999px;
+    border: 2px solid #111322;
+}
+
+.saved-profiles-sidebar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 100%);
 }
 
 

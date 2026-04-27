@@ -1798,7 +1798,7 @@
 
   <!-- Sidebar -->
   <aside
-    class={`fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto border-r border-slate-900/80 bg-[#111322] p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
+    class={`saved-profiles-sidebar fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto border-r border-slate-900/80 bg-[#111322] p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
     aria-label="Saved profiles"
   >
     <div class="mb-3 flex items-center justify-between lg:mb-4">

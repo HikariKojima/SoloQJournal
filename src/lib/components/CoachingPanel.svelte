@@ -37,6 +37,7 @@
   let aiConsent = $state<"granted" | "denied" | null>(null);
 
   const aiConsentStorageKey = "soloq:ai-consent-v1";
+  const COACHING_TIMELINE_TIMEOUT_MS = 1800;
 
   const cache: Record<string, string> = {};
   const storageKey = $derived.by(
@@ -174,6 +175,25 @@
     return matchId?.split("_")[0]?.toLowerCase() || inferredPlatform;
   }
 
+  async function withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+  ): Promise<T | undefined> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<undefined>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve(undefined), timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
+
   async function enrichRecentMatchesForPattern(
     sourceMatches: MatchSummaryResponse[],
   ): Promise<MatchSummaryResponse[]> {
@@ -253,29 +273,25 @@
 
     try {
       const timelineStartMs = performance.now();
-      const timelineSignals = await getTimelineSignalsForCoaching();
+      const timelineSignals = await withTimeout(
+        getTimelineSignalsForCoaching(),
+        COACHING_TIMELINE_TIMEOUT_MS,
+      );
       const timelineElapsedMs = Math.round(performance.now() - timelineStartMs);
-      const matchesForHistory =
-        recentMatches.length > 0 ? recentMatches : [match];
-      const enrichedHistoryMatches = await enrichRecentMatchesForPattern(
-        matchesForHistory,
-      );
-      const computedPatternHistory = buildHistoryStats(
-        enrichedHistoryMatches,
-        playerPuuid,
-      );
+      const matchesForHistory = recentMatches.length > 0 ? recentMatches : [match];
+
+      void enrichRecentMatchesForPattern(matchesForHistory).catch(() => {
+        // Keep the coaching fast path unblocked if history enrichment is slow.
+      });
 
       const payload = buildCoachingPayload(
         match,
         playerPuuid,
-        enrichedHistoryMatches,
+        matchesForHistory,
         leagueEntry,
         timelineSignals,
         learningObjectives,
       );
-      payload.history = computedPatternHistory.sampleSize
-        ? computedPatternHistory
-        : history;
 
       const coachingFetchStartMs = performance.now();
       const res = await fetch("/api/coaching", {

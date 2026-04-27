@@ -81,7 +81,7 @@
 </div>
 
 {#if showConsentBanner}
-  <div class="fixed inset-x-0 bottom-3 z-[70] mx-auto w-[min(96vw,860px)] rounded-xl border border-slate-700 bg-slate-950/95 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.55)]">
+  <div class="fixed inset-x-0 bottom-3 z-70 mx-auto w-[min(96vw,860px)] rounded-xl border border-slate-700 bg-slate-950/95 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.55)]">
     <p class="text-sm text-slate-100">
       This app can use analytics and AI coaching processing. Analytics are optional.
       AI coaching requires explicit consent before match data is sent to the coaching provider.
