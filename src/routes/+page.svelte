@@ -872,6 +872,7 @@
     "selectedLearningObjectives",
     "soloq:analytics-consent-v1",
     "soloq:ai-consent-v1",
+    "soloq:theme-preference-v1",
   ];
 
   function collectLocalDataSnapshot(): Record<string, unknown> {
@@ -1798,14 +1799,14 @@
 
   <!-- Sidebar -->
   <aside
-    class={`saved-profiles-sidebar fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto border-r border-slate-900/80 bg-[#111322] p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
+    class={`saved-profiles-sidebar fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs overflow-y-auto border-r border-(--border) bg-(--card-bg) p-4 transform transition-transform duration-300 lg:static lg:z-auto lg:block lg:w-64 lg:max-w-none lg:translate-x-0 ${isMobileProfilesOpen ? "translate-x-0" : "-translate-x-full"}`}
     aria-label="Saved profiles"
   >
     <div class="mb-3 flex items-center justify-between lg:mb-4">
-      <h2 class="text-xl font-bold">Saved Profiles</h2>
+      <h2 class="text-2xl font-bold tracking-tight text-(--text-primary)">Saved Profiles</h2>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded p-1.5 text-gray-300 hover:bg-gray-700 lg:hidden"
+        class="inline-flex items-center justify-center rounded-md border border-(--border) bg-(--card-bg) p-1.5 text-(--text-muted) shadow-sm hover:bg-(--card-bg-hover) lg:hidden"
         aria-label="Close saved profiles"
         onclick={closeMobileProfiles}
       >
@@ -1817,13 +1818,13 @@
         <li
           class={`group rounded-xl border p-2.5 transition-colors ${
             i === profileStore.activeIndex
-              ? "border-[#6d28d9] bg-[rgba(109,40,217,0.16)]"
-              : "border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.48)] hover:border-[rgba(148,163,184,0.45)]"
+              ? "border-[#7c3aed] bg-[rgba(124,58,237,0.12)] shadow-[0_10px_25px_rgba(124,58,237,0.14)]"
+              : "border-[rgba(148,163,184,0.26)] bg-[rgba(255,255,255,0.72)] hover:border-[rgba(124,58,237,0.3)] hover:bg-[rgba(248,250,255,0.96)]"
           }`}
         >
           <div class="flex items-start gap-2">
             <button
-              class="min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 text-left transition hover:bg-[rgba(15,23,42,0.75)]"
+              class="min-w-0 flex-1 cursor-pointer rounded-lg px-2 py-1.5 text-left transition hover:bg-[rgba(124,58,237,0.06)]"
               onclick={() => {
                 profileStore.setActive(i);
                 closeMobileProfiles();
@@ -1837,7 +1838,7 @@
               </p>
               <div class="mt-1.5 flex items-center gap-2">
                 <span
-                  class="inline-flex items-center rounded-full border border-[rgba(148,163,184,0.35)] bg-[rgba(15,23,42,0.7)] px-2 py-[0.1rem] text-[0.68rem] font-medium uppercase tracking-[0.08em] text-gray-300"
+                  class="inline-flex items-center rounded-full border border-[rgba(124,58,237,0.18)] bg-[rgba(124,58,237,0.08)] px-2 py-[0.1rem] text-[0.68rem] font-medium uppercase tracking-[0.08em] text-(--text-muted)"
                   >{profile.region}</span
                 >
               </div>
@@ -1859,28 +1860,28 @@
       {/each}
     </ul>
 
-    <div class="mt-4 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
-      <p class="text-xs uppercase tracking-[0.12em] text-slate-300">
+    <div class="mt-4 rounded-lg border border-(--border) bg-(--card-bg-hover) p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+      <p class="text-xs uppercase tracking-[0.12em] text-(--text-muted)">
         Privacy tools
       </p>
       <div class="mt-2 flex flex-col gap-2">
         <button
           type="button"
-          class="rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-100 hover:bg-slate-700"
+          class="rounded border border-(--border) bg-(--card-bg) px-2.5 py-1.5 text-xs font-semibold text-(--text-primary) hover:bg-(--card-bg-hover)"
           onclick={exportLocalData}
         >
           Export local data (JSON)
         </button>
         <button
           type="button"
-          class="rounded border border-red-800 bg-red-900/55 px-2.5 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-800"
+          class="rounded border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
           onclick={clearAllLocalData}
         >
           Clear all local data
         </button>
       </div>
       {#if localDataNotice}
-        <p class="mt-2 text-xs text-slate-300">{localDataNotice}</p>
+        <p class="mt-2 text-xs text-(--text-muted)">{localDataNotice}</p>
       {/if}
     </div>
   </aside>
@@ -1890,7 +1891,7 @@
     <div class="mb-3 lg:hidden">
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm font-medium text-gray-100 hover:bg-gray-800"
+        class="inline-flex items-center gap-2 rounded-xl border border-(--border) bg-(--card-bg) px-3 py-2 text-sm font-medium text-(--text-primary) shadow-[0_6px_20px_rgba(15,23,42,0.06)] hover:bg-(--card-bg-hover)"
         onclick={openMobileProfiles}
       >
         <Menu size={16} />
@@ -1902,13 +1903,13 @@
     <div class="mb-6">
       <!-- Region Select -->
       <div class="mb-4">
-        <label for="platform" class="block text-base font-medium mb-1"
+        <label for="platform" class="block text-base font-semibold mb-1"
           >Region</label
         >
         <select
           id="platform"
           bind:value={selectedRegion}
-          class="w-full sm:w-40 p-2 bg-gray-800 border border-gray-600 rounded"
+          class="w-full sm:w-40 p-2 bg-(--card-bg) border border-(--border) rounded-lg text-(--text-primary) shadow-sm"
         >
           {#each regionOptions as region (region.value)}
             <option value={region.value}>{region.label}</option>
@@ -1922,24 +1923,24 @@
         onsubmit={handleSearchSubmit}
       >
         <div class="w-full flex-1">
-          <label for="gameName" class="block text-base font-medium mb-1"
+          <label for="gameName" class="block text-base font-semibold mb-1"
             >Game Name</label
           >
           <input
             id="gameName"
             bind:value={gameName}
-            class="w-full p-2 bg-gray-800 border border-gray-600 rounded"
+            class="w-full p-2 bg-(--card-bg) border border-(--border) rounded-lg text-(--text-primary) shadow-sm"
             placeholder={gameNamePlaceholder}
           />
         </div>
         <div class="w-full sm:w-40">
-          <label for="tagLine" class="block text-base font-medium mb-1"
+          <label for="tagLine" class="block text-base font-semibold mb-1"
             >Tag Line</label
           >
           <input
             id="tagLine"
             bind:value={tagLine}
-            class="w-full p-2 bg-gray-800 border border-gray-600 rounded {tagLineError
+            class="w-full p-2 bg-(--card-bg) border border-(--border) rounded-lg text-(--text-primary) shadow-sm {tagLineError
               ? 'border-red-500'
               : ''}"
             placeholder={tagLinePlaceholder}
@@ -1948,7 +1949,7 @@
         <button
           type="submit"
           disabled={loading}
-          class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center justify-center gap-2"
+          class="w-full sm:w-auto px-4 py-2 bg-(--primary) hover:brightness-110 rounded-lg flex items-center justify-center gap-2 text-(--primary-foreground) shadow-[0_10px_24px_rgba(91,33,182,0.2)]"
         >
           <Search size={16} />
           {loading ? "Searching..." : "Search"}
@@ -1960,16 +1961,16 @@
       {/if}
 
       <div
-        class="mt-3 rounded-lg border border-slate-700 bg-slate-900/45 px-3 py-2 text-sm text-slate-200"
+        class="mt-3 rounded-lg border border-(--border) bg-(--card-bg-hover) px-3 py-2 text-sm text-(--text-muted) shadow-sm"
       >
         Coaching uses explicit consent before AI processing. Review
         <a
-          class="underline decoration-slate-400 underline-offset-2 hover:text-white"
+          class="underline decoration-(--text-muted) underline-offset-2 hover:text-(--text-primary)"
           href="/privacy">Privacy</a
         >
         and
         <a
-          class="underline decoration-slate-400 underline-offset-2 hover:text-white"
+          class="underline decoration-(--text-muted) underline-offset-2 hover:text-(--text-primary)"
           href="/terms">Terms</a
         >.
       </div>
@@ -1982,11 +1983,11 @@
     {#if loading}
       <div class="mb-6 rounded-2xl bg-(--card-bg) p-4 animate-pulse">
         <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-          <div class="h-14 w-14 rounded-full bg-gray-700/60"></div>
+          <div class="h-14 w-14 rounded-full bg-(--surface-muted)/60"></div>
           <div class="flex-1 space-y-2">
-            <div class="h-6 w-40 sm:w-56 rounded bg-gray-700/60"></div>
-            <div class="h-4 w-28 rounded bg-gray-700/50"></div>
-            <div class="h-4 w-36 rounded bg-gray-700/40"></div>
+            <div class="h-6 w-40 sm:w-56 rounded bg-(--surface-muted)/60"></div>
+            <div class="h-4 w-28 rounded bg-(--surface-muted)/50"></div>
+            <div class="h-4 w-36 rounded bg-(--surface-muted)/40"></div>
           </div>
         </div>
       </div>
@@ -1997,10 +1998,10 @@
             <div
               class="mb-2 flex items-center justify-between animate-pulse max-md:flex-wrap max-md:items-start max-md:gap-2"
             >
-              <div class="h-4 w-20 rounded bg-gray-700/55"></div>
+              <div class="h-4 w-20 rounded bg-(--surface-muted)/55"></div>
               <div class="flex items-center gap-[0.4rem]">
-                <div class="h-6 w-12 rounded-full bg-gray-700/45"></div>
-                <div class="h-6 w-12 rounded-full bg-gray-700/35"></div>
+                <div class="h-6 w-12 rounded-full bg-(--surface-muted)/45"></div>
+                <div class="h-6 w-12 rounded-full bg-(--surface-muted)/35"></div>
               </div>
             </div>
 
@@ -2016,36 +2017,36 @@
                     <div class="flex items-start gap-1">
                       <div class="flex flex-col items-center gap-1">
                         <div
-                          class="aspect-square h-12.5 w-12.5 rounded-full bg-gray-700/60"
+                          class="aspect-square h-12.5 w-12.5 rounded-full bg-(--surface-muted)/60"
                         ></div>
                       </div>
                       <div class="flex flex-col items-center gap-1">
                         <div
-                          class="aspect-square h-9.5 w-9.5 rounded-full bg-gray-700/45"
+                          class="aspect-square h-9.5 w-9.5 rounded-full bg-(--surface-muted)/45"
                         ></div>
                       </div>
                     </div>
 
                     <div class="flex flex-col gap-[0.3rem]">
                       <div
-                        class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/50"
+                        class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-(--surface-muted)/50"
                       ></div>
                       <div
-                        class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-gray-700/35"
+                        class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-(--surface-muted)/35"
                       ></div>
                     </div>
 
                     <div class="flex min-w-0 flex-1 flex-col gap-[0.52rem]">
                       <div class="flex flex-col gap-[0.32rem]">
-                        <div class="h-4 w-24 rounded bg-gray-700/55"></div>
-                        <div class="h-3 w-44 rounded bg-gray-700/35"></div>
+                        <div class="h-4 w-24 rounded bg-(--surface-muted)/55"></div>
+                        <div class="h-3 w-44 rounded bg-(--surface-muted)/35"></div>
                       </div>
                       <div
                         class="mt-[0.4rem] flex flex-wrap items-center gap-[0.38rem]"
                       >
                         {#each Array(7) as ___, itemIndex (`search-loader-item-${dayIndex}-${cardIndex}-${itemIndex}`)}
                           <div
-                            class="h-6.5 w-6.5 rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-gray-700/40"
+                            class="h-6.5 w-6.5 rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-(--surface-muted)/40"
                           ></div>
                         {/each}
                       </div>
@@ -2055,16 +2056,16 @@
                   <div
                     class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start"
                   >
-                    <div class="h-6 w-20 rounded bg-gray-700/50"></div>
-                    <div class="h-4 w-16 rounded bg-gray-700/35 mt-2"></div>
+                    <div class="h-6 w-20 rounded bg-(--surface-muted)/50"></div>
+                    <div class="h-4 w-16 rounded bg-(--surface-muted)/35 mt-2"></div>
                   </div>
 
                   <div
                     class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3"
                   >
-                    <div class="h-5 w-14 rounded-full bg-gray-700/45"></div>
-                    <div class="h-4 w-20 rounded bg-gray-700/30"></div>
-                    <div class="h-4 w-16 rounded bg-gray-700/30"></div>
+                    <div class="h-5 w-14 rounded-full bg-(--surface-muted)/45"></div>
+                    <div class="h-4 w-20 rounded bg-(--surface-muted)/30"></div>
+                    <div class="h-4 w-16 rounded bg-(--surface-muted)/30"></div>
                   </div>
                 </div>
               {/each}
@@ -2083,7 +2084,7 @@
               <img
                 src={profileIcon(currentProfile.summoner.profileIconId)}
                 alt={`${currentProfile.summoner.name} profile icon`}
-                class="h-14 w-14 rounded-full border border-gray-600 object-cover max-sm:h-12 max-sm:w-12"
+                class="h-14 w-14 rounded-full border border-(--border) object-cover max-sm:h-12 max-sm:w-12"
                 loading="lazy"
               />
             {/if}
@@ -2104,7 +2105,7 @@
           </div>
 
           <div
-            class="rounded-xl border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.7)] p-3 md:min-w-63.75"
+            class="rounded-xl border border-(--border) bg-(--card-bg) p-3 md:min-w-63.75 shadow-[0_8px_16px_rgba(91,33,182,0.12)] hover:shadow-[0_12px_24px_rgba(91,33,182,0.18)] transition-shadow duration-200"
           >
             <p
               class="text-[0.72rem] uppercase tracking-[0.14em] text-(--text-muted)"
@@ -2127,7 +2128,7 @@
                   </div>
                 {:else}
                   <div
-                    class="inline-flex h-19 w-19 items-center justify-center rounded-full border border-[rgba(148,163,184,0.45)] bg-[rgba(15,23,42,0.9)] text-[0.72rem] font-semibold text-(--text-muted) max-sm:h-17 max-sm:w-17"
+                    class="inline-flex h-19 w-19 items-center justify-center rounded-full border border-(--border) bg-(--surface-muted) text-[0.72rem] font-semibold text-(--text-muted) max-sm:h-17 max-sm:w-17"
                   >
                     UNR
                   </div>
@@ -2137,7 +2138,7 @@
                   <p class="text-sm font-semibold text-(--text-primary)">
                     {rankedLabel}
                   </p>
-                  <p class="text-[0.8rem] font-medium text-[#c4b5fd]">
+                  <p class="text-[0.8rem] font-medium text-[#a78bfa]">
                     {rankedSolo.lp} LP
                   </p>
 
@@ -2185,10 +2186,10 @@
         class="mb-4 flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch max-md:gap-[0.85rem]"
       >
         <div>
-          <p class="text-[0.72rem] uppercase tracking-[0.16em] text-slate-50">
+          <p class="text-[0.72rem] uppercase tracking-[0.16em] text-(--text-primary)">
             Match history
           </p>
-          <p class="mt-1 text-[0.8rem] text-slate-50">
+          <p class="mt-1 text-[0.8rem] text-(--text-primary)">
             Filter games by champion and matchup (current season Solo/Duo only)
           </p>
         </div>
@@ -2201,7 +2202,7 @@
           >
             <button
               type="button"
-              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-[rgba(148,163,184,0.6)] bg-[rgba(15,23,42,0.95)] px-[0.9rem] py-[0.4rem] text-[0.82rem] text-(--text-primary)"
+              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-(--border) bg-(--card-bg) px-[0.9rem] py-[0.4rem] text-[0.82rem] text-(--text-primary)"
               onclick={toggleChampionFilter}
             >
               <div class="inline-flex items-center gap-2">
@@ -2224,16 +2225,16 @@
 
             {#if isChampionFilterOpen}
               <div
-                class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]"
+                class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-(--border) bg-(--card-bg) p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]"
               >
                 <button
                   type="button"
-                  class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
+                  class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-(--surface-muted) ${selectedChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
                   onclick={() => selectChampion(null)}
                 >
                   <div class="inline-flex items-center gap-2">
                     <span
-                      class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)"
+                      class="rounded-full bg-(--surface-muted) px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)"
                       >All</span
                     >
                     <span>All champions</span>
@@ -2269,7 +2270,7 @@
           >
             <button
               type="button"
-              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-[rgba(148,163,184,0.6)] bg-[rgba(15,23,42,0.95)] px-[0.9rem] py-[0.4rem] text-[0.82rem] text-(--text-primary)"
+              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-(--border) bg-(--card-bg) px-[0.9rem] py-[0.4rem] text-[0.82rem] text-(--text-primary)"
               onclick={toggleOpponentFilter}
             >
               <div class="inline-flex items-center gap-2">
@@ -2294,16 +2295,16 @@
 
             {#if isOpponentFilterOpen}
               <div
-                class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-[rgba(15,23,42,0.95)] bg-[#020617] p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]"
+                class="absolute left-0 right-0 z-20 mt-[0.4rem] max-h-[min(55vh,360px)] overflow-y-auto rounded-xl border border-(--border) bg-(--card-bg) p-[0.35rem] shadow-[0_18px_45px_rgba(0,0,0,0.9)]"
               >
                 <button
                   type="button"
-                  class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-[rgba(15,23,42,0.9)] ${selectedOpponentChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
+                  class={`w-full flex items-center justify-between gap-2 rounded-[9px] px-[0.45rem] py-[0.4rem] text-[0.8rem] text-(--text-primary) hover:bg-(--surface-muted) ${selectedOpponentChampion ? "" : "bg-[rgba(79,70,229,0.25)]"}`}
                   onclick={() => selectOpponentChampion(null)}
                 >
                   <div class="inline-flex items-center gap-2">
                     <span
-                      class="rounded-full bg-[rgba(15,23,42,0.9)] px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)"
+                      class="rounded-full bg-(--surface-muted) px-2 py-[0.1rem] text-[0.72rem] text-(--text-muted)"
                       >Any</span
                     >
                     <span>Any lane opponent</span>
@@ -2397,21 +2398,21 @@
           <div
             class="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"
           ></div>
-          <p class="text-gray-400">Loading more matches...</p>
+          <p class="text-(--text-muted)">Loading more matches...</p>
         </div>
       {/if}
 
       <!-- Message when all matches are loaded -->
       {#if !hasMore && currentProfile.matches && currentProfile.matches.length > 0}
         <div class="mt-6 text-center">
-          <p class="text-gray-400">All matches loaded</p>
+          <p class="text-(--text-muted)">All matches loaded</p>
         </div>
       {/if}
 
       <!-- Info message about filters -->
       {#if hasActiveMatchFilters && hasMore}
         <div class="mt-4 text-center">
-          <p class="text-gray-300 text-sm">
+          <p class="text-(--text-muted) text-sm">
             Filters apply to loaded matches. Scroll down to load more and refine
             results.
           </p>
@@ -2420,7 +2421,7 @@
 
       {#if reflectionModalOpen && selectedMatch}
         <div
-          class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4"
+          class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 sm:p-4"
           role="button"
           tabindex="0"
           aria-label="Close journal modal"
@@ -2438,13 +2439,13 @@
           }}
         >
           <div
-            class="journal-modal relative w-[min(96vw,750px)] bg-gray-900 border border-gray-700 rounded p-4 sm:p-6 shadow-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto text-sm sm:text-base leading-relaxed"
+            class="journal-modal relative w-[min(96vw,750px)] bg-(--card-bg) border border-(--border) rounded-2xl p-4 sm:p-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)] max-h-[92vh] sm:max-h-[90vh] overflow-y-auto text-sm sm:text-base leading-relaxed"
           >
             <!-- Header with result color coding -->
             <div class="relative mb-4 pr-10">
               <div>
                 <h2 class="text-xl font-bold mb-1">Journal</h2>
-                <p class="text-base text-gray-400">
+                <p class="text-base text-(--text-muted)">
                   Match: {selectedMatch.kda.kills}/{selectedMatch.kda
                     .deaths}/{selectedMatch.kda.assists} •
                   <span
@@ -2458,7 +2459,7 @@
               </div>
               <button
                 onclick={closeReflection}
-                class="absolute right-0 top-0 inline-flex h-8 w-8 items-center justify-center text-2xl leading-none text-gray-400 hover:text-gray-200"
+                class="absolute right-0 top-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-(--border) bg-(--card-bg) text-lg leading-none text-(--text-muted) shadow-sm transition hover:bg-(--card-bg-hover) hover:text-(--text-primary)"
                 aria-label="Close journal modal"
               >
                 ×
@@ -2490,12 +2491,12 @@
             {/if}
 
             <!-- Stats Dashboard Grid -->
-            <div class="mb-4 p-4 bg-gray-800 rounded border border-gray-700">
+            <div class="mb-4 rounded-xl border border-(--border) bg-(--card-bg-hover) p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
               <h3 class="text-base font-semibold mb-3">Performance Stats</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <!-- CS/Min -->
-                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">CS/Min</p>
+                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                  <p class="text-base text-(--text-muted) mb-1">CS/Min</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.csPerMin >
                     8
@@ -2511,8 +2512,8 @@
                 </div>
 
                 <!-- Gold/Min -->
-                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">Gold/Min</p>
+                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                  <p class="text-base text-(--text-muted) mb-1">Gold/Min</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.goldPerMin >
                     550
@@ -2528,8 +2529,8 @@
                 </div>
 
                 <!-- Kill Participation -->
-                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">Kill Participation</p>
+                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                  <p class="text-base text-(--text-muted) mb-1">Kill Participation</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.kpPercent >
                     60
@@ -2545,8 +2546,8 @@
                 </div>
 
                 <!-- Death Contribution -->
-                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">Death Contribution</p>
+                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                  <p class="text-base text-(--text-muted) mb-1">Death Contribution</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.deathPercent <
                     20
@@ -2562,12 +2563,12 @@
                 </div>
 
                 <!-- CS at 10 -->
-                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">CS at 10</p>
+                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                  <p class="text-base text-(--text-muted) mb-1">CS at 10</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.csAt10 ===
                     null
-                      ? 'text-gray-500'
+                      ? 'text-(--text-muted)'
                       : matchStats.csAt10 >= 80
                         ? 'text-green-400'
                         : matchStats.csAt10 >= 65
@@ -2585,12 +2586,12 @@
                 </div>
 
                 <!-- CS at 20 -->
-                <div class="bg-gray-700 p-2.5 sm:p-3 rounded">
-                  <p class="text-base text-gray-400 mb-1">CS at 20</p>
+                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                  <p class="text-base text-(--text-muted) mb-1">CS at 20</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.csAt20 ===
                     null
-                      ? 'text-gray-500'
+                      ? 'text-(--text-muted)'
                       : matchStats.csAt20 >= 165
                         ? 'text-green-400'
                         : matchStats.csAt20 >= 135
@@ -2613,7 +2614,7 @@
             <div class="mb-4">
               <label
                 for="emotional-state-slider"
-                class="block text-base font-semibold text-gray-300 mb-2"
+                class="block text-base font-semibold text-(--text-primary) mb-2"
                 >How did I feel? ({emotionalState ||
                   scoreToEmotion(emotionalStateScore)})</label
               >
@@ -2631,12 +2632,12 @@
                 class="w-full accent-purple-500"
               />
               <div
-                class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-gray-400"
+                class="mt-2 grid grid-cols-5 gap-2 text-center text-sm text-(--text-muted)"
               >
                 {#each emotionScale as emotion (emotion.score)}
                   <button
                     type="button"
-                    class={`rounded px-2 py-1 border transition ${emotion.score === emotionalStateScore ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-gray-700 hover:border-gray-500"}`}
+                    class={`rounded px-2 py-1 border transition ${emotion.score === emotionalStateScore ? "border-purple-500 bg-purple-500/10 text-purple-300" : "border-(--border) hover:border-purple-400"}`}
                     onclick={() =>
                       updateEmotionalStateFromSlider(emotion.score)}
                   >
@@ -2650,14 +2651,14 @@
             <div class="mb-4">
               <label
                 for="learning-objective"
-                class="block text-base font-semibold text-gray-300 mb-2"
+                class="block text-base font-semibold text-(--text-primary) mb-2"
                 >My Learning Objective</label
               >
               <div class="relative" bind:this={learningObjectiveDropdownEl}>
                 <button
                   id="learning-objective"
                   type="button"
-                  class="w-full px-3 py-2 rounded text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 flex items-center justify-between select-none bg-[#131620] border border-[#252b3d] text-[#e5e7eb]"
+                  class="w-full px-3 py-2 rounded text-base cursor-pointer hover:border-purple-500 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 flex items-center justify-between select-none bg-(--card-bg) border border-(--border) text-(--text-primary)"
                   onclick={toggleLearningObjectiveDropdown}
                   onkeydown={handleLearningObjectiveComboboxKeydown}
                   role="combobox"
@@ -2696,7 +2697,7 @@
                         </span>
                       {/each}
                     {:else}
-                      <span class="text-gray-400"
+                      <span class="text-(--text-muted)"
                         >Select one or more objectives...</span
                       >
                     {/if}
@@ -2711,15 +2712,15 @@
 
                 {#if isLearningObjectiveOpen}
                   <div
-                    class="absolute left-0 right-0 mt-1 z-20 rounded border border-[#252b3d] bg-[#131620] shadow-lg"
+                    class="absolute left-0 right-0 mt-1 z-20 rounded border border-(--border) bg-(--card-bg) shadow-lg"
                   >
                     {#if isAddingObjective}
                       <!-- Add New Objective Mode -->
-                      <div class="p-3 border-b border-gray-800">
+                        <div class="p-3 border-b border-(--border)">
                         <div class="mb-3">
                           <label
                             for="learning-objective-input"
-                            class="block text-sm text-gray-400 mb-2"
+                            class="block text-sm text-(--text-muted) mb-2"
                           >
                             New Learning Objective
                           </label>
@@ -2731,7 +2732,7 @@
                             onkeydown={handleLearningObjectiveInputKeydown}
                             placeholder="Enter new objective..."
                             aria-label="New learning objective"
-                            class="w-full px-3 py-2 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                            class="w-full px-3 py-2 rounded text-base text-(--text-muted) focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-(--page-bg) border border-(--border)"
                           />
                         </div>
                         <div class="flex gap-2">
@@ -2744,7 +2745,7 @@
                           </button>
                           <button
                             type="button"
-                            class="flex-1 px-3 py-2 rounded text-base font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 cursor-pointer"
+                            class="flex-1 px-3 py-2 rounded text-base font-medium text-(--text-muted) bg-(--card-bg-hover) hover:bg-(--surface-muted) focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 cursor-pointer"
                             onclick={() => {
                               isAddingObjective = false;
                               learningObjectiveInput = "";
@@ -2757,7 +2758,7 @@
                       </div>
                     {:else}
                       <!-- List View -->
-                      <div class="border-b border-gray-800 p-2">
+                      <div class="border-b border-(--border) p-2">
                         <input
                           type="text"
                           bind:this={learningObjectiveSearchInputEl}
@@ -2765,14 +2766,14 @@
                           onkeydown={handleLearningObjectiveSearchKeydown}
                           placeholder="Search objectives..."
                           aria-label="Search learning objectives"
-                          class="w-full px-3 py-2 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                          class="w-full px-3 py-2 rounded text-base text-(--text-muted) focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-(--page-bg) border border-(--border)"
                         />
                       </div>
 
                       {#if selectedObjectives.length}
                         <button
                           type="button"
-                          class="w-full text-left px-3 py-2 text-base text-gray-300 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800"
+                          class="w-full text-left px-3 py-2 text-base text-(--text-muted) hover:bg-(--card-bg-hover) cursor-pointer select-none focus:outline-none focus:bg-(--card-bg-hover)"
                           onclick={clearSelectedObjectives}
                         >
                           Clear selected objectives
@@ -2785,14 +2786,14 @@
                         aria-multiselectable="true"
                       >
                         {#if filteredLearningObjectives.length === 0}
-                          <p class="px-3 py-2 text-base text-gray-400">
+                          <p class="px-3 py-2 text-base text-(--text-muted)">
                             No objectives found.
                           </p>
                         {/if}
 
                         {#each filteredLearningObjectives as objective, index (objective)}
                           <div
-                            class="flex items-center border-t border-gray-800"
+                            class="flex items-center border-t border-(--border)"
                           >
                             {#if learningObjectives[editingObjectiveIndex] === objective}
                               <input
@@ -2801,7 +2802,7 @@
                                 bind:value={editingObjectiveInput}
                                 onkeydown={handleEditObjectiveInputKeydown}
                                 aria-label={`Edit objective ${objective}`}
-                                class="flex-1 px-3 py-2 text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                                class="flex-1 px-3 py-2 text-base text-(--text-muted) focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-(--page-bg) border border-(--border)"
                               />
                               <button
                                 type="button"
@@ -2816,7 +2817,7 @@
                               </button>
                               <button
                                 type="button"
-                                class="px-3 py-2 text-gray-400 hover:text-gray-300 text-sm font-medium cursor-pointer"
+                                class="px-3 py-2 text-(--text-muted) hover:text-(--text-muted) text-sm font-medium cursor-pointer"
                                 aria-label={`Cancel editing objective ${objective}`}
                                 onclick={(event) => {
                                   event.stopPropagation();
@@ -2830,13 +2831,13 @@
                                 type="button"
                                 role="option"
                                 aria-selected={isObjectiveSelected(objective)}
-                                class={`flex-1 text-left px-3 py-2 text-base hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 ${
+                                class={`flex-1 text-left px-3 py-2 text-base hover:bg-(--card-bg-hover) cursor-pointer select-none focus:outline-none focus:bg-(--card-bg-hover) ${
                                   isObjectiveSelected(objective)
                                     ? "text-white"
-                                    : "text-gray-300"
+                                    : "text-(--text-muted)"
                                 } ${
                                   highlightedObjectiveIndex === index
-                                    ? "bg-gray-800"
+                                    ? "bg-(--card-bg-hover)"
                                     : ""
                                 }`}
                                 onclick={() => {
@@ -2868,7 +2869,7 @@
                               </button>
                               <button
                                 type="button"
-                                class="px-3 py-2 text-gray-400 hover:text-red-400 text-xl leading-none cursor-pointer"
+                                class="px-3 py-2 text-(--text-muted) hover:text-red-400 text-xl leading-none cursor-pointer"
                                 aria-label={`Delete objective ${objective}`}
                                 onclick={(event) => {
                                   event.stopPropagation();
@@ -2886,7 +2887,7 @@
 
                       <button
                         type="button"
-                        class="w-full border-t border-gray-800 text-left px-3 py-2 text-base text-purple-400 hover:bg-gray-800 cursor-pointer select-none focus:outline-none focus:bg-gray-800 focus:text-purple-300"
+                        class="w-full border-t border-(--border) text-left px-3 py-2 text-base text-purple-700 hover:bg-(--card-bg-hover) cursor-pointer select-none focus:outline-none focus:bg-(--card-bg-hover) focus:text-purple-600"
                         onclick={(event) => {
                           event.stopPropagation();
                           updateObjective("__add__");
@@ -2900,7 +2901,7 @@
 
                 {#if isAddingObjective}
                   <div
-                    class="mt-1 rounded border border-[#252b3d] bg-[#131620] shadow-lg"
+                    class="mt-1 rounded border border-(--border) bg-(--card-bg) shadow-lg"
                   >
                     <div class="p-2 flex gap-2">
                       <input
@@ -2909,7 +2910,7 @@
                         bind:value={learningObjectiveInput}
                         onkeydown={handleLearningObjectiveInputKeydown}
                         placeholder="Enter new objective..."
-                        class="flex-1 px-3 py-2 rounded text-base text-gray-300 focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-[#0c0e14] border border-[#252b3d]"
+                        class="flex-1 px-3 py-2 rounded text-base text-(--text-muted) focus:border-purple-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-500 bg-(--page-bg) border border-(--border)"
                       />
                       <button
                         type="button"
@@ -2924,7 +2925,7 @@
                           isAddingObjective = false;
                           learningObjectiveInput = "";
                         }}
-                        class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-base text-gray-200 cursor-pointer select-none"
+                        class="px-3 py-2 bg-(--surface-muted) hover:bg-gray-600 rounded text-base text-(--text-primary) cursor-pointer select-none"
                       >
                         Cancel
                       </button>
@@ -2938,7 +2939,7 @@
             <div class="mb-4">
               <label
                 for="objective-execution"
-                class="block text-base font-semibold text-gray-300 mb-2"
+                class="block text-base font-semibold text-(--text-muted) mb-2"
                 >Did I execute on my learning objective?</label
               >
               <textarea
@@ -2949,7 +2950,7 @@
                     "objectiveExecution",
                     objectiveExecution,
                   )}
-                class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
+                class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-(--page-bg) border border-(--border) text-(--text-primary)"
                 placeholder="Your thoughts..."
               ></textarea>
             </div>
@@ -2960,14 +2961,14 @@
               <div>
                 <label
                   for="went-well"
-                  class="block text-base font-semibold text-gray-300 mb-2"
+                  class="block text-base font-semibold text-(--text-muted) mb-2"
                   >What did I do well?</label
                 >
                 <textarea
                   id="went-well"
                   bind:value={wentWell}
                   onblur={() => autoSaveReflectionField("wentWell", wentWell)}
-                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
+                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-(--page-bg) border border-(--border) text-(--text-primary)"
                   placeholder="Your thoughts..."
                 ></textarea>
               </div>
@@ -2976,14 +2977,14 @@
               <div>
                 <label
                   for="went-bad"
-                  class="block text-base font-semibold text-gray-300 mb-2"
+                  class="block text-base font-semibold text-(--text-muted) mb-2"
                   >What could I have done better?</label
                 >
                 <textarea
                   id="went-bad"
                   bind:value={wentBad}
                   onblur={() => autoSaveReflectionField("wentBad", wentBad)}
-                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-[#0c0e14] border border-[#252b3d] text-[#e5e7eb]"
+                  class="w-full px-3 py-2 h-20 rounded text-base resize-vertical bg-(--page-bg) border border-(--border) text-(--text-primary)"
                   placeholder="Your thoughts..."
                 ></textarea>
               </div>
@@ -2992,7 +2993,7 @@
             <!-- Auto-save indicator -->
             {#if reflectionSaved}
               <div
-                class="pointer-events-none absolute bottom-4 right-4 rounded-md border border-purple-500/50 bg-black/75 px-3 py-1.5 text-sm text-purple-300 shadow-lg animate-pulse"
+                class="pointer-events-none absolute bottom-4 right-4 rounded-md border border-purple-300 bg-(--card-bg) px-3 py-1.5 text-sm text-purple-700 shadow-lg animate-pulse"
                 role="status"
                 aria-live="polite"
               >
@@ -3003,15 +3004,18 @@
             <!-- Modal Footer -->
             <div class="flex justify-end gap-2">
               <button
-                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-base font-semibold"
-                onclick={closeReflection}>Close</button
+                class="inline-flex items-center justify-center rounded-lg border border-(--border) bg-(--card-bg-hover) px-4 py-2 text-base font-semibold text-(--text-primary) shadow-sm transition hover:bg-(--surface-muted)"
+                onclick={closeReflection}
               >
+                Close
+              </button>
             </div>
           </div>
         </div>
       {/if}
     {:else}
-      <p class="text-gray-400">Search for a summoner to view their profile.</p>
+      <p class="text-(--text-muted)">Search for a summoner to view their profile.</p>
     {/if}
   </main>
 </div>
+

@@ -81,7 +81,7 @@
     "inline-flex items-center justify-center rounded-full px-[0.55rem] py-[0.1rem] text-[0.72rem] font-semibold uppercase tracking-[0.12em]";
 
   const championCircleBaseClass =
-    "relative box-border aspect-square overflow-hidden rounded-full bg-[#1e2538]";
+    "relative box-border aspect-square overflow-hidden rounded-full bg-(--card-bg)";
 
   const championImageClass =
     "h-full w-full rounded-full object-cover object-center block scale-[1.08]";
@@ -90,10 +90,10 @@
     "h-3.5 w-3.5 object-contain filter-[brightness(0)_invert(1)]";
 
   const playerFallbackClass =
-    "absolute inset-0 flex items-center justify-center rounded-full bg-[#1e2538] text-[0.7rem] font-semibold text-(--text-primary)";
+    "absolute inset-0 flex items-center justify-center rounded-full bg-(--card-bg) text-[0.7rem] font-semibold text-(--text-primary)";
 
   const junglerFallbackClass =
-    "absolute inset-0 flex items-center justify-center rounded-full bg-[#1e2538] text-[0.58rem] font-semibold text-(--text-primary)";
+    "absolute inset-0 flex items-center justify-center rounded-full bg-(--card-bg) text-[0.58rem] font-semibold text-(--text-primary)";
 
   const cardAccentClass = $derived.by(() =>
     match.result === "win"
@@ -273,7 +273,7 @@
               alt="Primary summoner spell"
               width="20"
               height="20"
-              class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-[#050816] object-cover max-md:h-4.5 max-md:w-4.5"
+              class="h-5 w-5 rounded border border-(--border) bg-(--card-bg) object-cover max-md:h-4.5 max-md:w-4.5"
               loading="lazy"
             />
           {/if}
@@ -283,7 +283,7 @@
               alt="Secondary summoner spell"
               width="20"
               height="20"
-              class="h-5 w-5 rounded border border-[rgba(15,23,42,0.9)] bg-[#050816] object-cover max-md:h-4.5 max-md:w-4.5"
+              class="h-5 w-5 rounded border border-(--border) bg-(--card-bg) object-cover max-md:h-4.5 max-md:w-4.5"
               loading="lazy"
             />
           {/if}
@@ -308,7 +308,7 @@
         <div class="mt-[0.4rem] flex items-center gap-[0.38rem]">
           {#each itemSlots as itemId, index (index)}
             <div
-              class="h-6.5 w-6.5 overflow-hidden rounded-[5px] border border-[rgba(15,23,42,0.9)] bg-[#050816]"
+              class="h-6.5 w-6.5 overflow-hidden rounded-[5px] border border-(--border) bg-(--card-bg)"
             >
               {#if itemId}
                 <img
@@ -355,7 +355,7 @@
 
       <button
         type="button"
-        class="mt-[0.45rem] inline-flex items-center gap-[0.45rem] rounded-full border border-[rgba(167,139,250,0.65)] bg-[radial-gradient(circle_at_top_left,rgba(129,140,248,0.26),rgba(15,23,42,0.98))] px-4 py-2 text-[0.8rem] font-semibold text-(--text-primary) shadow-[0_8px_24px_rgba(46,16,101,0.35)] transition-[background-color,border-color,transform,box-shadow] duration-150 ease-in hover:-translate-y-px hover:border-[rgba(196,181,253,0.9)] hover:shadow-[0_12px_28px_rgba(76,29,149,0.42)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(196,181,253,0.95)]"
+        class="mt-[0.45rem] inline-flex items-center gap-[0.45rem] rounded-full border border-(--primary) bg-(--primary) px-4 py-2 text-[0.8rem] font-semibold text-white shadow-[0_8px_24px_rgba(91,33,182,0.2)] transition-[background-color,border-color,transform,box-shadow] duration-150 ease-in hover:-translate-y-px hover:border-(--primary) hover:shadow-[0_12px_28px_rgba(91,33,182,0.3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--primary)"
         onclick={(event) => {
           event.stopPropagation();
           showCoaching = !showCoaching;
@@ -540,7 +540,7 @@
     <div
       aria-live="polite"
       data-coach-panel="true"
-      class="rounded-xl border border-[rgba(15,23,42,0.9)] bg-[#020617] px-[1.05rem] py-[0.9rem]"
+      class="rounded-xl border border-(--border) bg-(--card-bg) px-[1.05rem] py-[0.9rem]"
       transition:slide={{ duration: 150 }}
     >
       <CoachingPanel

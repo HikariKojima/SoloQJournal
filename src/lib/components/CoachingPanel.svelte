@@ -434,13 +434,13 @@
     width: 100%;
     max-width: none;
     border-radius: 14px;
-    border: 1px solid rgba(167, 139, 250, 0.4);
+    border: 1px solid rgba(124, 58, 237, 0.2);
     background:
-      radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 46%),
-      radial-gradient(circle at top left, rgba(16, 185, 129, 0.1), transparent 42%),
-      #050b1b;
+      radial-gradient(circle at top right, rgba(124, 58, 237, 0.1), transparent 46%),
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 42%),
+      var(--card-bg);
     padding: 1.15rem 1.25rem;
-    box-shadow: 0 18px 44px rgba(2, 6, 23, 0.62);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
   }
 
   .coaching-loading-row {
@@ -448,23 +448,23 @@
     align-items: center;
     gap: 0.55rem;
     border-radius: 9999px;
-    border: 1px solid rgba(167, 139, 250, 0.5);
-    background-color: rgba(15, 23, 42, 0.88);
+    border: 1px solid rgba(124, 58, 237, 0.22);
+    background-color: rgba(124, 58, 237, 0.08);
     padding: 0.36rem 0.72rem;
     font-size: 0.8rem;
     font-weight: 600;
-    color: #ddd6fe;
+    color: var(--text-primary);
     animation: coaching-pulse 1.2s ease-in-out infinite;
   }
 
   .coaching-consent-box {
     border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.42);
-    background-color: rgba(15, 23, 42, 0.82);
+    border: 1px solid rgba(148, 163, 184, 0.38);
+    background-color: rgba(139, 92, 246, 0.08);
     padding: 0.75rem 0.85rem;
     font-size: 0.8rem;
     line-height: 1.4;
-    color: #dbe4f2;
+    color: var(--text-primary);
   }
 
   .coaching-consent-actions {
@@ -483,20 +483,24 @@
   }
 
   .consent-primary {
-    border: 1px solid rgba(167, 139, 250, 0.8);
-    background: rgba(91, 33, 182, 0.55);
-    color: #ede9fe;
+    border: 1px solid rgba(91, 33, 182, 0.95);
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .consent-primary:hover {
+    filter: brightness(1.05);
   }
 
   .consent-secondary {
-    border: 1px solid rgba(148, 163, 184, 0.6);
-    background: rgba(15, 23, 42, 0.95);
-    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.7);
+    background: var(--card-bg);
+    color: var(--text-primary);
   }
 
   .consent-link {
     align-self: center;
-    color: #a5b4fc;
+    color: var(--primary);
     text-decoration: underline;
     text-underline-offset: 2px;
     font-size: 0.78rem;
@@ -509,16 +513,16 @@
     background-color: rgba(127, 29, 29, 0.34);
     padding: 0.55rem 0.7rem;
     font-size: 0.82rem;
-    color: #fecaca;
+    color: #b91c1c;
   }
 
   .coaching-output {
     margin-top: 0.68rem;
     border-radius: 12px;
-    border: 1px solid rgba(99, 102, 241, 0.34);
-    background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.94));
+    border: 1px solid rgba(99, 102, 241, 0.24);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(237, 233, 254, 0.68));
     padding: 0.95rem 1rem;
-    color: #e2e8f0;
+    color: var(--text-primary);
     max-width: none;
   }
 
@@ -536,14 +540,14 @@
 
   :global(.coaching-prose h2) {
     margin: 0.1rem 0 0.5rem;
-    color: #c4b5fd;
+    color: var(--primary);
     font-size: 0.98rem;
     letter-spacing: 0.01em;
   }
 
   :global(.coaching-prose h3) {
     margin: 0.75rem 0 0.4rem;
-    color: #a5b4fc;
+    color: #6d28d9;
     font-size: 0.88rem;
   }
 
@@ -551,7 +555,7 @@
     margin: 0.35rem 0;
     font-size: 0.84rem;
     line-height: 1.45;
-    color: #dbe4f2;
+    color: var(--text-primary);
   }
 
   :global(.coaching-prose .coaching-bullet) {
@@ -568,11 +572,11 @@
     width: 0.32rem;
     height: 0.32rem;
     border-radius: 9999px;
-    background-color: #8b5cf6;
+    background-color: var(--primary);
   }
 
   :global(.coaching-prose strong) {
-    color: #f8fafc;
+    color: #0f172a;
   }
 
   @media (max-width: 640px) {
@@ -603,4 +607,5 @@
       font-size: 0.8rem;
     }
   }
+
 </style>

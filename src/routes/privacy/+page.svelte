@@ -2,9 +2,9 @@
   <title>SoloQ Journal</title>
 </svelte:head>
 
-<main class="mx-auto w-full max-w-4xl px-4 py-10 text-slate-100">
+<main class="mx-auto w-full max-w-4xl px-4 py-10 text-(--text-primary)">
   <h1 class="text-3xl font-bold">Privacy Policy</h1>
-  <p class="mt-2 text-sm text-slate-300">Last updated: April 9, 2026</p>
+  <p class="mt-2 text-sm text-(--text-muted)">Last updated: April 9, 2026</p>
 
   <section class="mt-8 space-y-3">
     <h2 class="text-xl font-semibold">What we process</h2>
@@ -48,10 +48,11 @@
     </p>
   </section>
 
-  <section class="mt-8 space-y-3 rounded-lg border border-slate-700 bg-slate-900/50 p-4">
+  <section class="mt-8 space-y-3 rounded-lg border border-(--border) bg-(--card-bg)/70 p-4">
     <h2 class="text-xl font-semibold">Riot legal notice</h2>
     <p>
       SoloQ Journal isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
     </p>
   </section>
 </main>
+
