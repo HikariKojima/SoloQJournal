@@ -17,7 +17,7 @@
     profileIcon,
     setDdragonVersion,
   } from "$lib/utils/ddragon";
-  import { Search, ChevronDown, Menu, X } from "lucide-svelte";
+  import { Search, ChevronDown, Menu, X, RefreshCw } from "lucide-svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -330,6 +330,23 @@
         isRankHydrating = false;
       }
     }
+  }
+
+  async function refreshRankedSolo() {
+    const profile = currentProfile;
+    const puuid = profile?.summoner?.puuid?.trim();
+    if (!puuid) {
+      return;
+    }
+
+    rankIconFailed = false;
+    rankIconIndex = 0;
+
+    await hydrateRankedSoloInBackground({
+      summonerId: profile?.summoner?.id,
+      puuid,
+      force: true,
+    });
   }
 
   /**
@@ -2107,11 +2124,25 @@
           <div
             class="rounded-xl border border-(--border) bg-(--card-bg) p-3 md:min-w-63.75 shadow-[0_8px_16px_rgba(91,33,182,0.12)] hover:shadow-[0_12px_24px_rgba(91,33,182,0.18)] transition-shadow duration-200"
           >
-            <p
-              class="text-[0.72rem] uppercase tracking-[0.14em] text-(--text-muted)"
-            >
-              Solo/Duo Rank
-            </p>
+            <div class="flex items-center justify-between gap-2">
+              <p
+                class="text-[0.72rem] uppercase tracking-[0.14em] text-(--text-muted)"
+              >
+                Solo/Duo Rank
+              </p>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-(--border) px-2 py-1 text-[0.7rem] font-semibold text-(--text-muted) transition-colors hover:bg-(--card-bg-hover) hover:text-(--text-primary) disabled:cursor-not-allowed disabled:opacity-60"
+                onclick={() => {
+                  void refreshRankedSolo();
+                }}
+                disabled={isRankHydrating || !currentProfile?.summoner?.puuid}
+                aria-label="Refresh solo duo rank"
+              >
+                <RefreshCw size={12} class={isRankHydrating ? "animate-spin" : ""} />
+                {isRankHydrating ? "Refreshing" : "Refresh"}
+              </button>
+            </div>
             {#if rankedSolo}
               <div class="mt-2 flex items-center gap-3">
                 {#if currentRankIconUrl && !rankIconFailed}

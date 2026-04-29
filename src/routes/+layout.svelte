@@ -138,7 +138,7 @@
 
 <div class="min-h-screen flex flex-col bg-(--page-bg) text-(--text-primary)">
   <header class="sticky top-0 z-60 border-b border-(--border) bg-(--card-bg)/90 px-4 py-3 backdrop-blur-sm">
-    <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+    <div class="flex w-full items-center justify-between gap-3">
       <p class="text-lg font-semibold tracking-[0.08em] text-(--text-primary) md:text-xl">SoloQ Journal</p>
       <div class="inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--background) p-1">
         {#each themeOptions as option (option.value)}
