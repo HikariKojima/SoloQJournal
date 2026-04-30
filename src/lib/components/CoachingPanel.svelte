@@ -119,7 +119,9 @@
     return segments;
   }
 
-  async function getTimelineSignalsForCoaching(): Promise<TimelineCoachingSignals | undefined> {
+  async function getTimelineSignalsForCoaching(): Promise<
+    TimelineCoachingSignals | undefined
+  > {
     const matchTimeline = match.timelineInsights;
     const hasInMemorySignals =
       Array.isArray(matchTimeline?.deathTimestampsMinutes) &&
@@ -155,9 +157,13 @@
 
     return {
       csAt10:
-        typeof payload?.stats?.csAt10 === "number" ? payload.stats.csAt10 : null,
+        typeof payload?.stats?.csAt10 === "number"
+          ? payload.stats.csAt10
+          : null,
       csAt20:
-        typeof payload?.stats?.csAt20 === "number" ? payload.stats.csAt20 : null,
+        typeof payload?.stats?.csAt20 === "number"
+          ? payload.stats.csAt20
+          : null,
       deathTimestampsMinutes: Array.isArray(timeline.deathTimestampsMinutes)
         ? timeline.deathTimestampsMinutes
         : [],
@@ -229,7 +235,9 @@
             ...entry,
             timelineInsights: {
               deathTimestampsMs: [],
-              deathTimestampsMinutes: Array.isArray(timeline.deathTimestampsMinutes)
+              deathTimestampsMinutes: Array.isArray(
+                timeline.deathTimestampsMinutes,
+              )
                 ? timeline.deathTimestampsMinutes
                 : [],
               csDropAfterDeaths: Array.isArray(timeline.csDropAfterDeaths)
@@ -278,7 +286,8 @@
         COACHING_TIMELINE_TIMEOUT_MS,
       );
       const timelineElapsedMs = Math.round(performance.now() - timelineStartMs);
-      const matchesForHistory = recentMatches.length > 0 ? recentMatches : [match];
+      const matchesForHistory =
+        recentMatches.length > 0 ? recentMatches : [match];
 
       void enrichRecentMatchesForPattern(matchesForHistory).catch(() => {
         // Keep the coaching fast path unblocked if history enrichment is slow.
@@ -350,9 +359,14 @@
 
 <div class="coaching-panel-shell">
   {#if aiConsent !== "granted"}
-    <div class="coaching-consent-box" role="region" aria-label="AI coaching consent">
+    <div
+      class="coaching-consent-box"
+      role="region"
+      aria-label="AI coaching consent"
+    >
       <p>
-        AI coaching sends selected match stats to the coaching provider. Please grant consent to generate coaching.
+        AI coaching sends selected match stats to the coaching provider. Please
+        grant consent to generate coaching.
       </p>
       <div class="coaching-consent-actions">
         <button type="button" class="consent-primary" onclick={grantAiConsent}>
@@ -384,7 +398,9 @@
       {#each coachingLines as line, index (index)}
         {#if line.startsWith("## ")}
           <h2>
-            {#each splitBoldSegments(line.slice(3).trim()) as segment, segmentIndex (segmentIndex)}
+            {#each splitBoldSegments(line
+                .slice(3)
+                .trim()) as segment, segmentIndex (segmentIndex)}
               {#if segment.bold}
                 <strong>{segment.text}</strong>
               {:else}
@@ -394,7 +410,9 @@
           </h2>
         {:else if line.startsWith("### ")}
           <h3>
-            {#each splitBoldSegments(line.slice(4).trim()) as segment, segmentIndex (segmentIndex)}
+            {#each splitBoldSegments(line
+                .slice(4)
+                .trim()) as segment, segmentIndex (segmentIndex)}
               {#if segment.bold}
                 <strong>{segment.text}</strong>
               {:else}
@@ -404,7 +422,9 @@
           </h3>
         {:else if line.startsWith("- ")}
           <p class="coaching-bullet">
-            {#each splitBoldSegments(line.slice(2).trim()) as segment, segmentIndex (segmentIndex)}
+            {#each splitBoldSegments(line
+                .slice(2)
+                .trim()) as segment, segmentIndex (segmentIndex)}
               {#if segment.bold}
                 <strong>{segment.text}</strong>
               {:else}
@@ -435,9 +455,16 @@
     max-width: none;
     border-radius: 14px;
     border: 1px solid rgba(124, 58, 237, 0.2);
-    background:
-      radial-gradient(circle at top right, rgba(124, 58, 237, 0.1), transparent 46%),
-      radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 42%),
+    background: radial-gradient(
+        circle at top right,
+        rgba(124, 58, 237, 0.1),
+        transparent 46%
+      ),
+      radial-gradient(
+        circle at top left,
+        rgba(59, 130, 246, 0.08),
+        transparent 42%
+      ),
       var(--card-bg);
     padding: 1.15rem 1.25rem;
     box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
@@ -520,10 +547,24 @@
     margin-top: 0.68rem;
     border-radius: 12px;
     border: 1px solid rgba(99, 102, 241, 0.24);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(237, 233, 254, 0.68));
+    background: linear-gradient(
+      180deg,
+      rgba(25, 28, 42, 0.8),
+      rgba(20, 24, 36, 0.95)
+    );
     padding: 0.95rem 1rem;
     color: var(--text-primary);
     max-width: none;
+  }
+
+  @media (prefers-color-scheme: light) {
+    .coaching-output {
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.92),
+        rgba(237, 233, 254, 0.68)
+      );
+    }
   }
 
   @keyframes coaching-pulse {
@@ -576,7 +617,13 @@
   }
 
   :global(.coaching-prose strong) {
-    color: #0f172a;
+    color: #c4b5fd;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :global(.coaching-prose strong) {
+      color: #0f172a;
+    }
   }
 
   @media (max-width: 640px) {
@@ -607,5 +654,4 @@
       font-size: 0.8rem;
     }
   }
-
 </style>
