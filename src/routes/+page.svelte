@@ -34,6 +34,7 @@
   let rankIconFailed = $state(false);
   let rankIconIndex = $state(0);
   let isRankHydrating = $state(false);
+  let rankRefreshError = $state("");
   let isLoadingInitialMatches = $state(false);
   let rankHydrationRequestId = 0;
   const hydratedRankPuuids = new SvelteSet<string>();
@@ -324,7 +325,18 @@
       }
 
       applyRankedSoloToCurrentProfile(options.puuid, rankedSolo);
-    } catch {
+      try {
+        await tick();
+      } catch {
+        // tick may be a no-op in some environments; ignore
+      }
+    } catch (err: unknown) {
+      console.error("hydrateRankedSoloInBackground failed", err);
+      if (err instanceof Error) {
+        rankRefreshError = err.message;
+      } else {
+        rankRefreshError = String(err ?? "Failed to refresh rank");
+      }
     } finally {
       if (requestId === rankHydrationRequestId) {
         isRankHydrating = false;
@@ -341,6 +353,7 @@
 
     rankIconFailed = false;
     rankIconIndex = 0;
+    rankRefreshError = "";
 
     await hydrateRankedSoloInBackground({
       summonerId: profile?.summoner?.id,
@@ -1820,7 +1833,9 @@
     aria-label="Saved profiles"
   >
     <div class="mb-3 flex items-center justify-between lg:mb-4">
-      <h2 class="text-2xl font-bold tracking-tight text-(--text-primary)">Saved Profiles</h2>
+      <h2 class="text-2xl font-bold tracking-tight text-(--text-primary)">
+        Saved Profiles
+      </h2>
       <button
         type="button"
         class="inline-flex items-center justify-center rounded-md border border-(--border) bg-(--card-bg) p-1.5 text-(--text-muted) shadow-sm hover:bg-(--card-bg-hover) lg:hidden"
@@ -1877,7 +1892,9 @@
       {/each}
     </ul>
 
-    <div class="mt-4 rounded-lg border border-(--border) bg-(--card-bg-hover) p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+    <div
+      class="mt-4 rounded-lg border border-(--border) bg-(--card-bg-hover) p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+    >
       <p class="text-xs uppercase tracking-[0.12em] text-(--text-muted)">
         Privacy tools
       </p>
@@ -2017,8 +2034,12 @@
             >
               <div class="h-4 w-20 rounded bg-(--surface-muted)/55"></div>
               <div class="flex items-center gap-[0.4rem]">
-                <div class="h-6 w-12 rounded-full bg-(--surface-muted)/45"></div>
-                <div class="h-6 w-12 rounded-full bg-(--surface-muted)/35"></div>
+                <div
+                  class="h-6 w-12 rounded-full bg-(--surface-muted)/45"
+                ></div>
+                <div
+                  class="h-6 w-12 rounded-full bg-(--surface-muted)/35"
+                ></div>
               </div>
             </div>
 
@@ -2055,8 +2076,12 @@
 
                     <div class="flex min-w-0 flex-1 flex-col gap-[0.52rem]">
                       <div class="flex flex-col gap-[0.32rem]">
-                        <div class="h-4 w-24 rounded bg-(--surface-muted)/55"></div>
-                        <div class="h-3 w-44 rounded bg-(--surface-muted)/35"></div>
+                        <div
+                          class="h-4 w-24 rounded bg-(--surface-muted)/55"
+                        ></div>
+                        <div
+                          class="h-3 w-44 rounded bg-(--surface-muted)/35"
+                        ></div>
                       </div>
                       <div
                         class="mt-[0.4rem] flex flex-wrap items-center gap-[0.38rem]"
@@ -2074,13 +2099,17 @@
                     class="flex min-w-25.5 flex-col items-center max-md:w-full max-md:min-w-0 max-md:items-start"
                   >
                     <div class="h-6 w-20 rounded bg-(--surface-muted)/50"></div>
-                    <div class="h-4 w-16 rounded bg-(--surface-muted)/35 mt-2"></div>
+                    <div
+                      class="h-4 w-16 rounded bg-(--surface-muted)/35 mt-2"
+                    ></div>
                   </div>
 
                   <div
                     class="order-6 flex min-w-32 flex-col items-end gap-[0.42rem] max-md:w-full max-md:min-w-0 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-3"
                   >
-                    <div class="h-5 w-14 rounded-full bg-(--surface-muted)/45"></div>
+                    <div
+                      class="h-5 w-14 rounded-full bg-(--surface-muted)/45"
+                    ></div>
                     <div class="h-4 w-20 rounded bg-(--surface-muted)/30"></div>
                     <div class="h-4 w-16 rounded bg-(--surface-muted)/30"></div>
                   </div>
@@ -2139,10 +2168,18 @@
                 disabled={isRankHydrating || !currentProfile?.summoner?.puuid}
                 aria-label="Refresh solo duo rank"
               >
-                <RefreshCw size={12} class={isRankHydrating ? "animate-spin" : ""} />
+                <RefreshCw
+                  size={12}
+                  class={isRankHydrating ? "animate-spin" : ""}
+                />
                 {isRankHydrating ? "Refreshing" : "Refresh"}
               </button>
             </div>
+            {#if rankRefreshError}
+              <p class="mt-2 text-[0.75rem] text-red-500" aria-live="polite">
+                {rankRefreshError}
+              </p>
+            {/if}
             {#if rankedSolo}
               <div class="mt-2 flex items-center gap-3">
                 {#if currentRankIconUrl && !rankIconFailed}
@@ -2217,7 +2254,9 @@
         class="mb-4 flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch max-md:gap-[0.85rem]"
       >
         <div>
-          <p class="text-[0.72rem] uppercase tracking-[0.16em] text-(--text-primary)">
+          <p
+            class="text-[0.72rem] uppercase tracking-[0.16em] text-(--text-primary)"
+          >
             Match history
           </p>
           <p class="mt-1 text-[0.8rem] text-(--text-primary)">
@@ -2522,11 +2561,15 @@
             {/if}
 
             <!-- Stats Dashboard Grid -->
-            <div class="mb-4 rounded-xl border border-(--border) bg-(--card-bg-hover) p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+            <div
+              class="mb-4 rounded-xl border border-(--border) bg-(--card-bg-hover) p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+            >
               <h3 class="text-base font-semibold mb-3">Performance Stats</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <!-- CS/Min -->
-                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                <div
+                  class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm"
+                >
                   <p class="text-base text-(--text-muted) mb-1">CS/Min</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.csPerMin >
@@ -2543,7 +2586,9 @@
                 </div>
 
                 <!-- Gold/Min -->
-                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                <div
+                  class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm"
+                >
                   <p class="text-base text-(--text-muted) mb-1">Gold/Min</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.goldPerMin >
@@ -2560,8 +2605,12 @@
                 </div>
 
                 <!-- Kill Participation -->
-                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
-                  <p class="text-base text-(--text-muted) mb-1">Kill Participation</p>
+                <div
+                  class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm"
+                >
+                  <p class="text-base text-(--text-muted) mb-1">
+                    Kill Participation
+                  </p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.kpPercent >
                     60
@@ -2577,8 +2626,12 @@
                 </div>
 
                 <!-- Death Contribution -->
-                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
-                  <p class="text-base text-(--text-muted) mb-1">Death Contribution</p>
+                <div
+                  class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm"
+                >
+                  <p class="text-base text-(--text-muted) mb-1">
+                    Death Contribution
+                  </p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.deathPercent <
                     20
@@ -2594,7 +2647,9 @@
                 </div>
 
                 <!-- CS at 10 -->
-                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                <div
+                  class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm"
+                >
                   <p class="text-base text-(--text-muted) mb-1">CS at 10</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.csAt10 ===
@@ -2617,7 +2672,9 @@
                 </div>
 
                 <!-- CS at 20 -->
-                <div class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm">
+                <div
+                  class="rounded-lg border border-(--border) bg-(--card-bg) p-2.5 sm:p-3 shadow-sm"
+                >
                   <p class="text-base text-(--text-muted) mb-1">CS at 20</p>
                   <p
                     class="text-xl sm:text-2xl font-bold {matchStats.csAt20 ===
@@ -2747,7 +2804,7 @@
                   >
                     {#if isAddingObjective}
                       <!-- Add New Objective Mode -->
-                        <div class="p-3 border-b border-(--border)">
+                      <div class="p-3 border-b border-(--border)">
                         <div class="mb-3">
                           <label
                             for="learning-objective-input"
@@ -3045,8 +3102,9 @@
         </div>
       {/if}
     {:else}
-      <p class="text-(--text-muted)">Search for a summoner to view their profile.</p>
+      <p class="text-(--text-muted)">
+        Search for a summoner to view their profile.
+      </p>
     {/if}
   </main>
 </div>
-
