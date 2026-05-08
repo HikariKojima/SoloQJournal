@@ -360,6 +360,9 @@
       puuid,
       force: true,
     });
+
+    // Refresh match history after rank updates
+    await loadInitialMatchesForCurrentSearch();
   }
 
   /**
@@ -1846,12 +1849,12 @@
       </button>
     </div>
     <ul class="space-y-3">
-      {#each profileStore.list as profile, i (`${profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
+      {#each profileStore.list as profile, i (`${profile.summoner?.puuid ?? profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
         <li
           class={`group rounded-xl border p-2.5 transition-colors ${
             i === profileStore.activeIndex
               ? "border-[#7c3aed] bg-[rgba(124,58,237,0.12)] shadow-[0_10px_25px_rgba(124,58,237,0.14)]"
-              : "border-[rgba(148,163,184,0.26)] bg-[rgba(255,255,255,0.72)] hover:border-[rgba(124,58,237,0.3)] hover:bg-[rgba(248,250,255,0.96)]"
+              : "border-(--border) bg-(--card-bg) hover:border-[rgba(124,58,237,0.3)] hover:bg-(--card-bg-hover)"
           }`}
         >
           <div class="flex items-start gap-2">
@@ -1866,7 +1869,11 @@
               <p
                 class="wrap-break-word text-[1.03rem] font-semibold leading-tight text-(--text-primary)"
               >
-                {profile.gameName}{profile.tagLine}
+                {profile.summoner?.name ??
+                  (profile.gameName
+                    ? profile.gameName.charAt(0).toUpperCase() +
+                      profile.gameName.slice(1)
+                    : "")}{profile.tagLine}
               </p>
               <div class="mt-1.5 flex items-center gap-2">
                 <span
@@ -1878,8 +1885,9 @@
 
             <button
               type="button"
-              class="shrink-0 rounded-md border border-[#b91c1c] bg-[#dc2626] px-2.5 py-1 text-[0.82rem] font-semibold text-white transition hover:bg-[#b91c1c]"
-              aria-label={`Delete saved profile ${profile.gameName}${profile.tagLine}`}
+              class="shrink-0 cursor-pointer rounded-md border border-red-700 bg-red-600 px-2.5 py-1 text-[0.82rem] font-semibold text-white transition-all duration-150 hover:bg-red-800 hover:border-red-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+              title="Delete saved profile"
+              aria-label={`Delete saved profile ${profile.summoner?.name ?? profile.gameName}${profile.tagLine}`}
               onclick={(event) => {
                 event.stopPropagation();
                 profileStore.removeProfile(i);

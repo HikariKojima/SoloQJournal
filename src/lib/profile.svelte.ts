@@ -18,7 +18,9 @@ class ProfileStore {
     return value?.trim().toLowerCase() ?? "";
   }
 
-  private getProfileIdentity(profile: Pick<SavedProfile, "gameName" | "tagLine" | "region">): string {
+  private getProfileIdentity(
+    profile: Pick<SavedProfile, "gameName" | "tagLine" | "region">,
+  ): string {
     const gameName = this.normalizeProfilePart(profile.gameName);
     const tagLine = this.normalizeProfilePart(profile.tagLine);
     const region = this.normalizeProfilePart(profile.region) || "euw1";
@@ -29,14 +31,14 @@ class ProfileStore {
     if (!value || typeof value !== "object") return false;
 
     const candidate = value as Partial<SavedProfile>;
+    // Be permissive to support legacy/localStorage entries that may not
+    // include full `summoner` or `matches` fields. We'll normalize them
+    // during load so the UI can display a fallback name when necessary.
     return (
       typeof candidate.gameName === "string" &&
       typeof candidate.tagLine === "string" &&
       typeof candidate.region === "string" &&
-      typeof candidate.lastFetched === "string" &&
-      Array.isArray(candidate.matches) &&
-      typeof candidate.summoner === "object" &&
-      candidate.summoner !== null
+      typeof candidate.lastFetched === "string"
     );
   }
 
@@ -55,23 +57,49 @@ class ProfileStore {
               continue;
             }
 
-            const identity = this.getProfileIdentity(entry);
+            // Normalize missing fields for backward compatibility
+            const candidate = entry as Partial<SavedProfile>;
+            const normalized: SavedProfile = {
+              gameName: String(candidate.gameName ?? ""),
+              tagLine: String(candidate.tagLine ?? ""),
+              region: String(candidate.region ?? "euw1"),
+              lastFetched: String(
+                candidate.lastFetched ?? new Date().toISOString(),
+              ),
+              matches: Array.isArray(candidate.matches)
+                ? (candidate.matches as any[])
+                : [],
+              summoner:
+                candidate.summoner && typeof candidate.summoner === "object"
+                  ? (candidate.summoner as any)
+                  : {
+                      puuid: "",
+                      id: "",
+                      accountId: "",
+                      name: String(candidate.gameName ?? ""),
+                      profileIconId: 0,
+                      level: 0,
+                    },
+              rankedSolo: (candidate as any).rankedSolo ?? null,
+            };
+
+            const identity = this.getProfileIdentity(normalized);
             const existing = dedupedByIdentity.get(identity);
 
             if (!existing) {
-              dedupedByIdentity.set(identity, entry);
+              dedupedByIdentity.set(identity, normalized);
               continue;
             }
 
             const existingTimestamp = Date.parse(existing.lastFetched);
-            const candidateTimestamp = Date.parse(entry.lastFetched);
+            const candidateTimestamp = Date.parse(normalized.lastFetched);
             const shouldReplace =
               Number.isFinite(candidateTimestamp) &&
               (!Number.isFinite(existingTimestamp) ||
                 candidateTimestamp >= existingTimestamp);
 
             if (shouldReplace) {
-              dedupedByIdentity.set(identity, entry);
+              dedupedByIdentity.set(identity, normalized);
             }
           }
 
@@ -82,24 +110,40 @@ class ProfileStore {
           );
           // Persist cleaned data so migration runs once for legacy duplicates.
           localStorage.setItem("lol-profiles", JSON.stringify(this.list));
-        } catch {
-        }
+        } catch {}
       }
     }
   }
 
   addProfile(profile: SavedProfile) {
-    const identity = this.getProfileIdentity(profile);
+    // Normalize stored fields: prefer the canonical summoner name for display
+    const baseName = profile.summoner?.name ?? profile.gameName;
+    const capitalizedName =
+      baseName && baseName.length > 0
+        ? baseName.charAt(0).toUpperCase() + baseName.slice(1)
+        : baseName;
+
+    const normalizedProfile: SavedProfile = {
+      ...profile,
+      gameName: capitalizedName,
+      tagLine: profile.tagLine?.startsWith("#")
+        ? profile.tagLine
+        : `#${profile.tagLine}`,
+      region: profile.region || "euw1",
+      matches: Array.isArray(profile.matches) ? profile.matches : [],
+    };
+
+    const identity = this.getProfileIdentity(normalizedProfile);
     const existingIndex = this.list.findIndex(
       (p) => this.getProfileIdentity(p) === identity,
     );
 
     if (existingIndex !== -1) {
       // Update existing profile with new data and set as active
-      this.list[existingIndex] = profile;
+      this.list[existingIndex] = normalizedProfile;
       this.activeIndex = existingIndex;
     } else {
-      this.list.push(profile);
+      this.list.push(normalizedProfile);
       this.activeIndex = this.list.length - 1;
     }
   }
