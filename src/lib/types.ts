@@ -169,7 +169,11 @@ export type RankedSoloEntry = {
 // Additional types for the app
 export type SavedProfile = {
   gameName: string;
+  /** Lowercased normalized game name for matching/dedup (not shown to user) */
+  gameNameNorm?: string;
   tagLine: string;
+  /** Normalized tagLine (includes leading # and lowercased) for matching/dedup */
+  tagLineNorm?: string;
   region: string;
   summoner: SummonerResponse;
   matches: MatchSummaryResponse[];

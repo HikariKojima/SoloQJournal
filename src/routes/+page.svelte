@@ -163,7 +163,8 @@
     const withoutHash = trimmed.replace(/^#+/, "").trim();
     if (!withoutHash) return null;
 
-    return `#${withoutHash}`;
+    // Always return tag with a single leading '#' and uppercased content
+    return `#${withoutHash.toUpperCase()}`;
   }
 
   function normalizeProfilePart(value: string | null | undefined): string {
@@ -181,10 +182,18 @@
 
     return (
       profileStore.list.find((profile) => {
+        const storedGameNorm =
+          (profile as any).gameNameNorm ??
+          normalizeProfilePart(profile.gameName);
+        const storedTagNorm =
+          (profile as any).tagLineNorm ?? normalizeProfilePart(profile.tagLine);
+        const storedRegionNorm =
+          (profile.region && profile.region.trim().toLowerCase()) || "euw1";
+
         return (
-          normalizeProfilePart(profile.gameName) === normalizedGameName &&
-          normalizeProfilePart(profile.tagLine) === normalizedTagLine &&
-          (normalizeProfilePart(profile.region) || "euw1") === normalizedRegion
+          storedGameNorm === normalizedGameName &&
+          storedTagNorm === normalizedTagLine &&
+          (storedRegionNorm || "euw1") === normalizedRegion
         );
       }) ?? null
     );
@@ -370,6 +379,7 @@
    * This happens silently after the initial search completes
    */
   async function loadAllMatchesForFilters() {
+    if (!browser) return;
     if (!currentSearchGameName || !currentSearchTagLine) return;
 
     // Create a unique key for this profile
@@ -408,6 +418,7 @@
   }
 
   async function loadInitialMatchesForCurrentSearch() {
+    if (!browser) return;
     if (!currentSearchGameName || !currentSearchTagLine) return;
 
     // Tie this request to the active search so older responses can be ignored safely.
@@ -471,6 +482,7 @@
   }
 
   async function handleSearch() {
+    if (!browser) return;
     loading = true;
     error = "";
     searchedProfile = null;
@@ -585,6 +597,7 @@
       tagLine: string;
     },
   ) {
+    if (!browser) return;
     // Set the region, game name, and tag line from the profile
     // Fallback to current selectedRegion if profile doesn't have region (for old saved profiles)
     selectedRegion = profile.region || selectedRegion || "euw1";
@@ -596,6 +609,7 @@
   }
 
   async function loadMore() {
+    if (!browser) return;
     if (!currentProfile || isLoadingMore || !hasMore) {
       return;
     }
@@ -1849,7 +1863,7 @@
       </button>
     </div>
     <ul class="space-y-3">
-      {#each profileStore.list as profile, i (`${profile.summoner?.puuid ?? profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
+      {#each profileStore.list as profile, i (`${profile.summoner?.puuid ?? profile.gameNameNorm ?? profile.gameName.toLowerCase().trim()}|${profile.tagLine.toLowerCase().trim()}|${profile.region.toLowerCase().trim()}`)}
         <li
           class={`group rounded-xl border p-2.5 transition-colors ${
             i === profileStore.activeIndex
@@ -1869,11 +1883,7 @@
               <p
                 class="wrap-break-word text-[1.03rem] font-semibold leading-tight text-(--text-primary)"
               >
-                {profile.summoner?.name ??
-                  (profile.gameName
-                    ? profile.gameName.charAt(0).toUpperCase() +
-                      profile.gameName.slice(1)
-                    : "")}{profile.tagLine}
+                {profile.gameName ?? profile.summoner?.name}{profile.tagLine}
               </p>
               <div class="mt-1.5 flex items-center gap-2">
                 <span

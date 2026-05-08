@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { browser } from "$app/environment";
   import { Sparkles } from "lucide-svelte";
   import { buildCoachingPayload, buildHistoryStats } from "$lib/utils/coaching";
   import type { MatchSummaryResponse } from "$lib/types";
@@ -122,6 +123,7 @@
   async function getTimelineSignalsForCoaching(): Promise<
     TimelineCoachingSignals | undefined
   > {
+    if (!browser) return undefined;
     const matchTimeline = match.timelineInsights;
     const hasInMemorySignals =
       Array.isArray(matchTimeline?.deathTimestampsMinutes) &&
@@ -203,6 +205,7 @@
   async function enrichRecentMatchesForPattern(
     sourceMatches: MatchSummaryResponse[],
   ): Promise<MatchSummaryResponse[]> {
+    if (!browser) return sourceMatches;
     if (!sourceMatches.length) return [];
 
     const limited = sourceMatches.slice(0, 6);

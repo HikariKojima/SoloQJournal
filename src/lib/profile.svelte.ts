@@ -21,8 +21,13 @@ class ProfileStore {
   private getProfileIdentity(
     profile: Pick<SavedProfile, "gameName" | "tagLine" | "region">,
   ): string {
-    const gameName = this.normalizeProfilePart(profile.gameName);
-    const tagLine = this.normalizeProfilePart(profile.tagLine);
+    const gameName =
+      // prefer an explicitly stored normalized value when available
+      (profile as any).gameNameNorm ??
+      this.normalizeProfilePart(profile.gameName);
+    const tagLine =
+      (profile as any).tagLineNorm ??
+      this.normalizeProfilePart(profile.tagLine);
     const region = this.normalizeProfilePart(profile.region) || "euw1";
     return `${gameName}|${tagLine}|${region}`;
   }
@@ -61,7 +66,12 @@ class ProfileStore {
             const candidate = entry as Partial<SavedProfile>;
             const normalized: SavedProfile = {
               gameName: String(candidate.gameName ?? ""),
-              tagLine: String(candidate.tagLine ?? ""),
+              // Ensure tag is stored with a single leading # and uppercase content
+              tagLine: (() => {
+                const raw = String(candidate.tagLine ?? "");
+                const withoutHash = raw.replace(/^#+/, "").trim();
+                return withoutHash ? `#${withoutHash.toUpperCase()}` : "";
+              })(),
               region: String(candidate.region ?? "euw1"),
               lastFetched: String(
                 candidate.lastFetched ?? new Date().toISOString(),
@@ -82,6 +92,14 @@ class ProfileStore {
                     },
               rankedSolo: (candidate as any).rankedSolo ?? null,
             };
+
+            // Populate normalized fields used for identity/matching
+            (normalized as any).gameNameNorm = String(normalized.gameName ?? "")
+              .trim()
+              .toLowerCase();
+            (normalized as any).tagLineNorm = String(normalized.tagLine ?? "")
+              .trim()
+              .toLowerCase();
 
             const identity = this.getProfileIdentity(normalized);
             const existing = dedupedByIdentity.get(identity);
@@ -116,22 +134,32 @@ class ProfileStore {
   }
 
   addProfile(profile: SavedProfile) {
-    // Normalize stored fields: prefer the canonical summoner name for display
-    const baseName = profile.summoner?.name ?? profile.gameName;
-    const capitalizedName =
-      baseName && baseName.length > 0
-        ? baseName.charAt(0).toUpperCase() + baseName.slice(1)
-        : baseName;
+    // Preserve the exact `gameName` casing provided and enforce uppercase tagLine
+    const storedGameName = profile.gameName ?? profile.summoner?.name ?? "";
+    const cleanTag = String(profile.tagLine ?? "")
+      .replace(/^#+/, "")
+      .trim();
+    const storedTagLine = cleanTag ? `#${cleanTag.toUpperCase()}` : "";
 
     const normalizedProfile: SavedProfile = {
       ...profile,
-      gameName: capitalizedName,
-      tagLine: profile.tagLine?.startsWith("#")
-        ? profile.tagLine
-        : `#${profile.tagLine}`,
+      gameName: storedGameName,
+      tagLine: storedTagLine,
       region: profile.region || "euw1",
       matches: Array.isArray(profile.matches) ? profile.matches : [],
     };
+
+    // Populate normalization fields used for matching/deduplication
+    (normalizedProfile as any).gameNameNorm = String(
+      normalizedProfile.gameName ?? "",
+    )
+      .trim()
+      .toLowerCase();
+    (normalizedProfile as any).tagLineNorm = String(
+      normalizedProfile.tagLine ?? "",
+    )
+      .trim()
+      .toLowerCase();
 
     const identity = this.getProfileIdentity(normalizedProfile);
     const existingIndex = this.list.findIndex(
